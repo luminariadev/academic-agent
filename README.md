@@ -15,7 +15,7 @@
 
 **Sistem Otomasi Akademik Cerdas Berbasis n8n, Multi-Agent LLM (9Router / Hermes), Generator Jadwal .ics RFC 5545, dan Bot Notifikasi Interaktif Discord.**
 
-[Fitur Utama](#-fitur-utama) • [Arsitektur Sistem](#-arsitektur-sistem) • [Workflow n8n](#-workflow-n8n) • [Panduan Instalasi](#-panduan-instalasi) • [Penggunaan CLI](#-penggunaan-cli) • [Pengujian](#-pengujian)
+[📖 Panduan Lengkap Pengguna (Setup Mandiri)](USER_GUIDE.md) • [Fitur Utama](#-fitur-utama) • [Arsitektur Sistem](#-arsitektur-sistem) • [Workflow n8n](#-workflow-n8n) • [Panduan Instalasi](#-panduan-instalasi) • [Penggunaan CLI](#-penggunaan-cli) • [Pengujian](#-pengujian)
 
 </div>
 
@@ -93,6 +93,10 @@ File workflow produksi tersedia di [`workflows/academic-agent.n8n.json`](workflo
 ---
 
 ## 🚀 Panduan Instalasi & Menjalankan
+
+> [!TIP]
+> **Ingin menyiapkan API Key dan Bot Discord milik Anda sendiri?**  
+> Baca panduan langkah-demi-langkah ramah pemula di [**`USER_GUIDE.md`**](USER_GUIDE.md) yang menjelaskan cara membuat Bot Discord pribadi, mendapatkan API key (OpenAI/9Router/Ollama), dan mengatur lingkungan mandiri Anda!
 
 ### Persyaratan Awal
 - **Python 3.11+**
