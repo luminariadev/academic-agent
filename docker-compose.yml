@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: academic-agent-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PORT=5678
+      - N8N_HOST=localhost
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Jakarta
+      - TZ=Asia/Jakarta
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - ROUTER_API_BASE=http://host.docker.internal:20128/v1
+      - ROUTER_API_KEY=${ROUTER_API_KEY}
+      - ROUTER_MODEL=${ROUTER_MODEL:-mr-loverman}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+      - ./workflows:/workflows:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - academic-network
+
+  academic-agent:
+    build: .
+    container_name: academic-agent-core
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ROUTER_API_BASE=http://host.docker.internal:20128/v1
+      - ROUTER_API_KEY=${ROUTER_API_KEY}
+      - ROUTER_MODEL=${ROUTER_MODEL:-mr-loverman}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/academic-task
+    volumes:
+      - ./tugas_mahasiswa:/app/tugas_mahasiswa
+      - ./backup_tugas:/app/backup_tugas
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - academic-network
+    depends_on:
+      - n8n
+
+networks:
+  academic-network:
+    driver: bridge

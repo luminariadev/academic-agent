@@ -1,0 +1,188 @@
+{
+  "name": "Academic Agent — AI Task & Syllabus Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "academic-task",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-trigger",
+      "name": "Webhook: New Document/Task",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [220, 300],
+      "webhookId": "academic-agent-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalisasi payload dari Webhook atau Watcher\nconst body = $input.first().json.body || $input.first().json;\n\nconst text = body.content || body.text || '';\nconst filename = body.filename || body.file_name || 'dokumen_tugas.txt';\n\nif (!text || text.trim().length === 0) {\n  throw new Error('Payload harus memuat teks tugas dalam field content atau text.');\n}\n\nreturn [{\n  json: {\n    raw_text: text.slice(0, 10000),\n    filename: filename,\n    received_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-preprocess-input",
+      "name": "Preprocess Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ROUTER_API_BASE || 'http://127.0.0.1:20128/v1' }}/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.ROUTER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.ROUTER_MODEL || 'mr-loverman' }}\",\n  \"stream\": false,\n  \"temperature\": 0.1,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Kamu adalah Akademik Agent, asisten AI mahasiswa. Ekstrak informasi akademik ke dalam JSON murni: { \\\"is_academic\\\": true, \\\"kind\\\": \\\"assignment\\\", \\\"course\\\": \\\"Nama Mata Kuliah\\\", \\\"title\\\": \\\"Judul Tugas\\\", \\\"deadline\\\": \\\"YYYY-MM-DD HH:MM\\\", \\\"estimated_hours\\\": 3, \\\"priority\\\": \\\"HIGH|MEDIUM|LOW\\\", \\\"summary\\\": \\\"Ringkasan eksekutif\\\", \\\"subtasks\\\": [\\\"Langkah 1\\\", \\\"Langkah 2\\\"], \\\"deliverables\\\": [\\\"Format tugas\\\"] }\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Nama Dokumen: {{ $json.filename }}\\n\\nIsi Dokumen:\\n{{ $json.raw_text }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-ai-extraction",
+      "name": "AI Node: 9Router / LLM Inference",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse hasil LLM dan bangun iCalendar (.ics) + Google Calendar Link\nconst aiResponse = $input.first().json;\nlet rawContent = '';\n\nif (aiResponse.choices && aiResponse.choices.length > 0) {\n  rawContent = aiResponse.choices[0].message.content;\n} else {\n  throw new Error('Gagal menerima respons AI dari 9Router.');\n}\n\n// Bersihkan markdown fence ```json jika ada\nlet cleaned = rawContent.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '').trim();\nlet task = {};\ntry {\n  task = JSON.parse(cleaned);\n} catch (e) {\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    task = JSON.parse(match[0]);\n  } else {\n    throw new Error('Respons AI tidak memuat format JSON yang valid.');\n  }\n}\n\nconst course = task.course || 'Perkuliahan';\nconst title = task.title || 'Tugas Baru';\nconst deadline = task.deadline || '';\nconst priority = (task.priority || 'MEDIUM').toUpperCase();\nconst summary = task.summary || 'Instruksi pengerjaan tugas akademik.';\n\n// Bangun URL 1-Click Google Calendar\nlet gcalUrl = '';\nif (deadline) {\n  const cleanDate = deadline.replace(/[^0-9]/g, '');\n  const startFmt = cleanDate.padEnd(14, '0').slice(0, 8) + 'T' + cleanDate.padEnd(14, '0').slice(8, 14) + 'Z';\n  const titleEnc = encodeURIComponent(`[${course}] ${title}`.slice(0, 70));\n  const descEnc = encodeURIComponent(summary.slice(0, 120));\n  gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${titleEnc}&dates=${startFmt}/${startFmt}&details=${descEnc}&location=Online+%2F+LMS`;\n}\n\n// Format checklist subtask\nconst subtaskList = (task.subtasks || []).map(st => `▫️ ${st}`).join('\\n');\n\n// Pilih warna embed Discord berdasarkan prioritas\nlet colorInt = 5793266; // Blue default\nif (priority === 'HIGH') colorInt = 15548997; // Red\nelse if (priority === 'MEDIUM') colorInt = 16705372; // Amber\nelse if (priority === 'LOW') colorInt = 5763719; // Green\n\nreturn [{\n  json: {\n    task: task,\n    course: course,\n    title: title,\n    deadline: deadline,\n    priority: priority,\n    summary: summary,\n    subtasks_formatted: subtaskList,\n    google_calendar_url: gcalUrl,\n    color_int: colorInt\n  }\n}];"
+      },
+      "id": "node-parse-transform",
+      "name": "Parse & Build Calendar Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/{{ $env.DISCORD_CHANNEL_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bot {{ $env.DISCORD_BOT_TOKEN }}"
+            },
+            {
+              "name": "User-Agent",
+              "value": "DiscordBot (AcademicAgent, 2.0)"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"embeds\": [\n    {\n      \"title\": \"🎓 Tugas Baru: {{ $json.title }}\",\n      \"description\": \"{{ $json.summary }}\",\n      \"color\": {{ $json.color_int }},\n      \"fields\": [\n        {\n          \"name\": \"📚 Mata Kuliah\",\n          \"value\": \"**{{ $json.course }}**\",\n          \"inline\": true\n        },\n        {\n          \"name\": \"⏰ Batas Waktu\",\n          \"value\": \"`{{ $json.deadline || 'Tidak ada deadline' }}`\",\n          \"inline\": true\n        },\n        {\n          \"name\": \"⚡ Prioritas\",\n          \"value\": \"`{{ $json.priority }}`\",\n          \"inline\": true\n        },\n        {\n          \"name\": \"📋 Sub-task Checklist\",\n          \"value\": \"{{ $json.subtasks_formatted }}\",\n          \"inline\": false\n        }\n      ],\n      \"footer\": {\n        \"text\": \"Academic Agent • n8n Orchestrator & 9Router AI\",\n        \"icon_url\": \"https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f393.png\"\n      }\n    }\n  ],\n  \"components\": [\n    {\n      \"type\": 1,\n      \"components\": [\n        {\n          \"type\": 2,\n          \"style\": 5,\n          \"label\": \"📅 Google Calendar\",\n          \"url\": \"{{ $json.google_calendar_url }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "node-discord-notification",
+      "name": "Send Discord Interactive Embed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Academic task processed and notified via Discord\",\n  \"task\": $('Parse & Build Calendar Data').first().json.task,\n  \"google_calendar\": $('Parse & Build Calendar Data').first().json.google_calendar_url\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: New Document/Task": {
+      "main": [
+        [
+          {
+            "node": "Preprocess Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preprocess Input": {
+      "main": [
+        [
+          {
+            "node": "AI Node: 9Router / LLM Inference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Node: 9Router / LLM Inference": {
+      "main": [
+        [
+          {
+            "node": "Parse & Build Calendar Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Build Calendar Data": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Interactive Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Interactive Embed": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "academic-agent"
+    },
+    {
+      "name": "automation"
+    },
+    {
+      "name": "ai-orchestration"
+    }
+  ]
+}

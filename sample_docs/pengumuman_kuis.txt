@@ -1,0 +1,13 @@
+PENGUMUMAN PERKULIAHAN & KUIS
+Mata Kuliah: Jaringan Komputer Lanjut
+Dosen: Ir. Farhan Suryo, M.Kom
+
+Diumumkan kepada seluruh mahasiswa kelas IF-6A bahwa Kuis 2 akan dilaksanakan secara daring:
+Materi: Software-Defined Networking (SDN) dan Protokol BGP
+Jadwal Kuis: 2026-11-22 10:00 - 11:30 WIB
+Media: Portal Ujian Daring Kampus
+
+Ketentuan:
+- Pastikan koneksi internet stabil
+- Durasi pengerjaan tepat 90 menit
+- Tidak ada kuis susulan kecuali dengan surat dokter resmi.
