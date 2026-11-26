@@ -1,0 +1,19 @@
+{
+  "name": "campus-generic",
+  "base_url": "https://portal.example.edu",
+  "login_path": "/auth/login",
+  "username_selector": "input[name='username']",
+  "password_selector": "input[name='password']",
+  "submit_selector": "button[type='submit']",
+  "logged_in_selector": ".user-profile",
+  "dashboard_path": "/courses",
+  "course_paths": [
+    "/courses/active"
+  ],
+  "item_selector": ".course-assignment",
+  "title_selector": ".assignment-title",
+  "course_selector": ".course-title",
+  "deadline_selector": ".due-date",
+  "summary_selector": ".assignment-description",
+  "attachment_selector": "a[href*='.pdf'], a[href*='.docx']"
+}

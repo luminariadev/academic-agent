@@ -1,0 +1,19 @@
+{
+  "name": "moodle-template",
+  "base_url": "https://lms.example.edu",
+  "login_path": "/login/index.php",
+  "username_selector": "#username",
+  "password_selector": "#password",
+  "submit_selector": "#loginbtn",
+  "logged_in_selector": ".usermenu",
+  "dashboard_path": "/my/",
+  "course_paths": [
+    "/course/view.php?id=101"
+  ],
+  "item_selector": "li.activity.assign",
+  "title_selector": ".instancename",
+  "course_selector": "h1.h2",
+  "deadline_selector": ".description .text-muted",
+  "summary_selector": ".activity-altcontent",
+  "attachment_selector": "a[href*='pluginfile.php']"
+}

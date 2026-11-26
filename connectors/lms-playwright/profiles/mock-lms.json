@@ -1,0 +1,20 @@
+{
+  "name": "mock-lms",
+  "base_url": "http://127.0.0.1:8099",
+  "login_path": "/login",
+  "username_selector": "#username",
+  "password_selector": "#password",
+  "submit_selector": "#login-btn",
+  "logged_in_selector": "#lms-user-menu",
+  "dashboard_path": "/dashboard",
+  "course_paths": [
+    "/courses/cs301",
+    "/courses/if402"
+  ],
+  "item_selector": ".assignment-card",
+  "title_selector": ".task-title",
+  "course_selector": ".task-course",
+  "deadline_selector": ".task-deadline",
+  "summary_selector": ".task-summary",
+  "attachment_selector": "a.attachment-link"
+}

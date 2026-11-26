@@ -9,3 +9,7 @@ archive/
 *.log
 .DS_Store
 Thumbs.db
+connectors/lms-playwright/state*.json
+connectors/lms-playwright/profiles/*.local.json
+__pycache__/
+.pytest_cache/
