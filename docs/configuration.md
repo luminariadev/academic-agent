@@ -33,10 +33,13 @@
 | :--- | :--- | :--- |
 | `enabled` | `true` | Enable Discord dispatch. |
 | `mode` | `"auto"` | `auto` (prefers Bot API when credentials exist, else Webhook), `bot`, or `webhook`. |
-| `bot_token` | `"${DISCORD_BOT_TOKEN}"` | Discord Bot token for REST API v10. |
+| `bot_token` | `"${DISCORD_BOT_TOKEN}"` | Discord Bot token for REST API v10 and Gateway WebSocket. |
 | `channel_id` | `"${DISCORD_CHANNEL_ID}"` | Target Discord channel snowflake ID. |
+| `application_id` | `"${DISCORD_APPLICATION_ID}"` | Discord Application ID required for slash command registration. |
+| `guild_id` | `"${DISCORD_GUILD_ID}"` | Optional Discord server (guild) snowflake ID for instant guild-scoped slash command sync. |
 | `webhook_url` | `"${DISCORD_WEBHOOK_URL}"` | Incoming Discord Webhook URL alternative. |
-| `allowed_users` | `[]` | Allowlist of Discord user IDs reserved for interactive commands. |
+| `allowed_users` | `[]` | Allowlist of Discord user IDs permitted to invoke slash commands and buttons (empty allows all server members). |
+| `gateway_url` | `""` | Optional custom Discord Gateway WebSocket URL override (defaults to `wss://gateway.discord.gg/?v=10&encoding=json`). |
 | `timeout_secs` | `15` | HTTP timeout per attempt. |
 | `max_retries` | `3` | Retry count on HTTP `429 Retry-After` and 5xx errors. |
 

@@ -4,6 +4,21 @@ All notable changes to `academic-agent` are documented in this file.
 
 The format follows Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.2.0] - 2026-11-27
+
+### Added
+
+- Two-way Discord Bot Gateway (`academic_core::discord_bot`) over WebSocket (`intents: 0`) handling `/tasks`, `/upcoming`, `/done`, `/snooze`, `/add`, and `/digest` slash commands plus `Mark Done` (`academic:done:<id>`) and `Snooze 24h` (`academic:snooze24:<id>`) button callbacks, with `[discord]` allowlist support (`allowed_users`), `application_id`, `guild_id`, and `gateway_url`.
+- New CLI commands `academic-agent discord register-commands [--guild]`, `academic-agent discord bot`, and `academic-agent serve --with-discord-bot`.
+- Embedded single-page local web task dashboard served at `GET /` with live summary cards (`Open Tasks`, `Due Within 72h`, `Overdue`, `Completed`), filters, document upload modal, manual task creation modal, `.ics` / JSON / CSV export, Bearer token entry, and `POST /api/cron-tick`.
+- Optional Python Playwright LMS connector (`connectors/lms-playwright/`) featuring configurable portal CSS selector profiles (`mock-lms.json`, `moodle-template.json`, `campus-generic.json`), persistent session cookie reuse, attachment downloads, a self-contained simulated campus LMS (`mock_lms.py`), offline pytest E2E tests, and dedicated setup guide ([docs/lms-playwright.md](docs/lms-playwright.md)).
+- High-DPI dashboard screenshots (`docs/assets/dashboard-overview.png`, `docs/assets/dashboard-detail.png`) and GitHub Actions `connector` CI job.
+
+### Changed
+
+- Attached `Mark Done` and `Snooze 24h` action buttons alongside Google Calendar links on task creation embeds and individual cron reminder alerts in Bot mode.
+- Updated `README.md`, `docs/configuration.md`, `docs/discord-and-hermes.md`, and `CHANGELOG.md` for `v0.2.0`.
+
 ## [0.1.1] - 2026-11-27
 
 ### Added

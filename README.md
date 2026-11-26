@@ -17,8 +17,22 @@ Syllabi, lecture PDFs, DOCX assignment sheets, and portal announcements arrive i
 - **Timezone-accurate calendars**: generates RFC 5545 `.ics` files with dual reminders (`-P1D` and `-PT1H`) and 1-click Google Calendar links converted accurately from your configured IANA timezone (for example `Asia/Jakarta`) to UTC.
 - **Embedded `redb` task store with deduplication**: computes SHA-256 content hashes inside ACID transactions so re-scanning or re-uploading the same document never duplicates tasks, calendars, or alerts.
 - **Cron reminder and digest scheduler**: dispatches a scheduled local-time daily digest plus tiered deadline alerts (default `H-72h`, `H-24h`, `H-3h`, and `OVERDUE`) with anti-spam persistence and per-task snoozing.
-- **Discord and Hermes integration**: sends structured embeds (and Google Calendar action buttons in Bot mode) over Discord REST v10 or Webhooks with HTTP `429 Retry-After` backoff, plus optional configurable `hermes` CLI dispatch and outbound signed n8n webhooks.
+- **Embedded local web dashboard**: serves a self-contained dark/light task management UI at `GET /` with urgency counters, status/priority filtering, document upload, manual task creation, `.ics`/JSON/CSV exports, and manual cron triggers.
+- **Two-way Discord and Hermes integration**: sends structured embeds with interactive **Mark Done**, **Snooze 24h**, and **Add to Google Calendar** buttons over Discord REST v10 or Webhooks (`429 Retry-After` backoff), handles slash commands (`/tasks`, `/upcoming`, `/done`, `/snooze`, `/add`, `/digest`) and button callbacks over Discord Gateway (`intents: 0`), plus optional `hermes` CLI dispatch and outbound signed n8n webhooks.
+- **Optional Playwright LMS connector**: bridges JavaScript-heavy university portals into `academic-agent serve` via [connectors/lms-playwright/](connectors/lms-playwright/README.md) with persistent session cookies, attachment uploads, configurable site selector profiles, and a simulated campus LMS for offline testing.
 - **Built-in MCP server**: serves 8 MCP tools and 4 read-only `academic://` resources over `stdio` or Streamable HTTP (`POST /mcp`).
+
+## Dashboard Preview
+
+Interactive web dashboard (`GET /`) displaying open, due within 72h, overdue, and completed tasks alongside the task detail modal:
+
+![academic-agent task and deadline dashboard overview](docs/assets/dashboard-overview.png)
+
+*Overview table with live urgency countdowns, bilingual priority/status badges, filters, and one-click task actions.*
+
+![academic-agent task detail modal with checklist and calendar export](docs/assets/dashboard-detail.png)
+
+*Task detail modal inspecting deliverables, subtask checklist, Google Calendar link, and `.ics` download.*
 
 ## Architecture
 
@@ -137,12 +151,16 @@ Global flags: `--config <PATH>` (default `academic-agent.toml`), `--db <PATH>`, 
 | `academic-agent cron-tick [--dry-run]` | Run one scheduled reminder and digest evaluation pass. |
 | `academic-agent test-ai [--text T] [--file F]` | Run structured extraction without persisting state. |
 | `academic-agent test-discord` | Send a synthetic verification embed via Discord or Hermes. |
-| `academic-agent serve [--bind B] [--with-cron] [--with-watch]` | Start REST API, `webdelta` webhook endpoint, background loops, and `/mcp`. |
+| `academic-agent discord register-commands [--guild]` | Register `/tasks`, `/upcoming`, `/done`, `/snooze`, `/add`, and `/digest` slash commands with Discord. |
+| `academic-agent discord bot` | Start the persistent Discord Gateway WebSocket listener (`intents: 0`). |
+| `academic-agent serve [--bind B] [--with-cron] [--with-watch] [--with-discord-bot]` | Start the web dashboard, REST API, `webdelta` webhook endpoint, background loops, and `/mcp`. |
 | `academic-agent mcp [--http <bind>] [--token <secret>]` | Run MCP over `stdio` or standalone Streamable HTTP. |
 
-## Discord, Hermes, n8n, and webdelta
+## Discord, Hermes, LMS Connector, n8n, and webdelta
 
-- **Discord and Hermes**: see [docs/discord-and-hermes.md](docs/discord-and-hermes.md) for configuring Bot REST API v10 (with 1-click Google Calendar link buttons), Discord Webhooks, `429 Retry-After` retries, and Hermes CLI fallback.
+- **Discord and Hermes**: see [docs/discord-and-hermes.md](docs/discord-and-hermes.md) for configuring Bot REST API v10, two-way Gateway slash commands (`/tasks`, `/upcoming`, `/done`, `/snooze`, `/add`, `/digest`) and button callbacks, `429 Retry-After` retries, and Hermes CLI fallback.
+- **Optional Playwright LMS connector**: see [docs/lms-playwright.md](docs/lms-playwright.md) for headless university portal scraping, persistent cookie reuse, selector manifests, and the built-in simulated campus LMS.
+- **Configuration reference**: see [docs/configuration.md](docs/configuration.md) for all TOML sections and environment variables.
 - **n8n and webdelta integration**: see [docs/webhooks-n8n.md](docs/webhooks-n8n.md) and [workflows/README.md](workflows/README.md) for importing `workflows/academic-agent.n8n.json` and forwarding signed `X-WebDelta-Signature` alerts from `webdelta` directly into `POST /api/webhooks/webdelta`.
 
 ## MCP Server
@@ -164,19 +182,20 @@ Tools exposed (`8`): `list_tasks`, `add_task`, `update_status`, `snooze_task`, `
 
 ## Development and Testing
 
-All unit, integration, CLI, MCP, and HTTP E2E tests run offline using local mock HTTP servers and generated in-memory PDF/DOCX documents:
+All unit, integration, CLI, MCP, HTTP E2E, and Playwright LMS connector tests run offline using local mock servers and synthetic academic documents:
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+python -m pytest connectors/lms-playwright/tests/test_lms_connector.py -v
 ```
 
 ## Roadmap
 
 - **v0.1.0**: Rust workspace overhaul (`academic-core`, `academic-mcp`, `academic-cli`), pure-Rust PDF/DOCX parsing, bilingual LLM/heuristic extraction, UTC-corrected `.ics` and Google Calendar links, `redb` content deduplication, cron reminder/digest scheduler, Discord + Hermes notifiers, Axum REST API with `webdelta` HMAC receiver, and `stdio` + HTTP MCP server.
-- **v0.2.0**: Two-way Discord Bot Gateway (slash commands and action buttons), embedded web task dashboard, and optional Playwright LMS connector (`connectors/lms-playwright/`) validated against a simulated campus portal.
-- **v0.3.0**: Multi-OS prebuilt release archives with `SHA256SUMS.txt`, non-root Docker GHCR image, Scoop and Homebrew manifests, dashboard screenshots, and measured benchmarks.
+- **v0.2.0**: Two-way Discord Bot Gateway (slash commands and interactive action buttons), embedded web task dashboard with high-DPI previews, and optional Playwright LMS connector (`connectors/lms-playwright/`) validated against a simulated campus portal.
+- **v0.3.0**: Multi-OS prebuilt release archives with `SHA256SUMS.txt`, non-root Docker GHCR image, Scoop and Homebrew manifests, and measured benchmarks.
 
 ## License
 
