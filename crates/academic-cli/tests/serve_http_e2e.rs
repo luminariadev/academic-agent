@@ -78,6 +78,13 @@ async fn test_serve_security_upload_webdelta_hmac_and_mcp_http() {
     }
     assert!(ready, "serve endpoint did not become healthy in time");
 
+    // 0. Embedded web dashboard loads cleanly on GET /
+    let dash = client.get(format!("{base}/")).send().await.unwrap();
+    assert_eq!(dash.status().as_u16(), 200);
+    let dash_html = dash.text().await.unwrap();
+    assert!(dash_html.contains("academic-agent"));
+    assert!(!dash_html.contains("Unlock"));
+
     // 1. Unauthorized without Bearer token
     let unauth = client
         .get(format!("{base}/api/tasks"))
@@ -85,6 +92,14 @@ async fn test_serve_security_upload_webdelta_hmac_and_mcp_http() {
         .await
         .unwrap();
     assert_eq!(unauth.status().as_u16(), 401);
+
+    let cron_unauth = client
+        .post(format!("{base}/api/cron-tick"))
+        .json(&json!({ "dry_run": true }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cron_unauth.status().as_u16(), 401);
 
     // 2. Reject path traversal filename on multipart upload
     let bad_part = Part::bytes(b"Course: AI\nTitle: Hack".to_vec()).file_name("../../evil.txt");
@@ -189,4 +204,16 @@ async fn test_serve_security_upload_webdelta_hmac_and_mcp_http() {
     let inner: Value =
         serde_json::from_str(mcp_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(inner["count"], 2);
+
+    // 7. Cron tick dry-run endpoint via Bearer token
+    let cron_ok = client
+        .post(format!("{base}/api/cron-tick"))
+        .bearer_auth(token)
+        .json(&json!({ "dry_run": true }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cron_ok.status().as_u16(), 200);
+    let cron_json: Value = cron_ok.json().await.unwrap();
+    assert_eq!(cron_json["dry_run"], true);
 }

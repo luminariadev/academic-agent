@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>academic-agent Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f141b;
+      --panel: #161d26;
+      --border: #263140;
+      --text: #e6edf3;
+      --muted: #8b98a9;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --code-bg: #0b0f14;
+    }
+    [data-theme="light"] {
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --muted: #656d76;
+      --accent: #0969da;
+      --accent-hover: #0550ae;
+      --green: #1a7f37;
+      --amber: #9a6700;
+      --red: #cf222e;
+      --code-bg: #f0f3f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .brand { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+    .brand span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input[type="text"], input[type="search"], input[type="password"], select, textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    input[type="search"] { min-width: 190px; }
+    button, .btn-link {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 11px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    button:hover, .btn-link:hover { border-color: var(--accent); }
+    button.primary, .btn-link.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+      font-weight: 600;
+    }
+    button.primary:hover, .btn-link.primary:hover { background: var(--accent-hover); }
+    button.danger { color: var(--red); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    main { max-width: 1240px; margin: 22px auto; padding: 0 20px; }
+    .banner {
+      background: var(--panel);
+      border: 1px solid var(--amber);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .banner.show { display: flex; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+    .stat-value.warn { color: var(--amber); }
+    .stat-value.danger { color: var(--red); }
+    .stat-value.ok { color: var(--green); }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .table-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td {
+      padding: 11px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    tr:last-child td { border-bottom: none; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .badge.high { color: var(--red); border-color: var(--red); }
+    .badge.medium { color: var(--amber); border-color: var(--amber); }
+    .badge.low { color: var(--green); border-color: var(--green); }
+    .badge.done { color: var(--green); border-color: var(--green); }
+    .badge.pending { color: var(--accent); border-color: var(--accent); }
+    .badge.muted-b { color: var(--muted); border-color: var(--border); }
+    .muted { color: var(--muted); font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .urgency-overdue { color: var(--red); font-weight: 600; font-size: 12px; }
+    .urgency-soon { color: var(--amber); font-weight: 600; font-size: 12px; }
+    .actions { display: flex; gap: 5px; flex-wrap: nowrap; }
+    dialog {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      max-width: 720px;
+      width: 92%;
+      padding: 0;
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+    .modal-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-body { padding: 18px; max-height: 75vh; overflow-y: auto; }
+    .form-grid { display: grid; gap: 12px; }
+    .form-row { display: grid; gap: 6px; }
+    .form-row label { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 12px 0 16px;
+    }
+    .detail-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .checklist { margin: 6px 0 14px 18px; padding: 0; }
+    .checklist li { margin-bottom: 4px; }
+    .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">academic-agent <span>Task & Deadline Dashboard</span></div>
+    <div class="controls">
+      <button id="open-upload-btn" class="primary">Upload Document</button>
+      <button id="open-add-btn">Add Task</button>
+      <button id="cron-btn">Cron Tick</button>
+      <button id="export-json-btn">Export JSON</button>
+      <button id="export-csv-btn">Export CSV</button>
+      <button id="refresh-btn">Refresh</button>
+      <button id="theme-btn">Theme</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="auth-banner" class="banner">
+      <span>API authentication required. Enter bearer token:</span>
+      <div class="controls">
+        <input id="token-input" type="password" placeholder="Bearer token">
+        <button id="token-save" class="primary">Save Token</button>
+      </div>
+    </div>
+
+    <div id="msg-banner" class="banner">
+      <span id="msg-text"></span>
+      <button onclick="document.getElementById('msg-banner').classList.remove('show')">Dismiss</button>
+    </div>
+
+    <section class="stats">
+      <div class="stat-card"><div class="stat-label">Open Tasks</div><div id="stat-open" class="stat-value">0</div></div>
+      <div class="stat-card"><div class="stat-label">Due Within 72h</div><div id="stat-soon" class="stat-value warn">0</div></div>
+      <div class="stat-card"><div class="stat-label">Overdue</div><div id="stat-overdue" class="stat-value danger">0</div></div>
+      <div class="stat-card"><div class="stat-label">Completed</div><div id="stat-done" class="stat-value ok">0</div></div>
+    </section>
+
+    <div class="toolbar">
+      <div class="controls">
+        <input id="search" type="search" placeholder="Filter by title or course...">
+        <select id="status-filter">
+          <option value="">All Statuses</option>
+          <option value="PENDING">PENDING</option>
+          <option value="IN_PROGRESS">IN_PROGRESS</option>
+          <option value="COMPLETED">COMPLETED</option>
+          <option value="ARCHIVED">ARCHIVED</option>
+        </select>
+        <select id="priority-filter">
+          <option value="">All Priorities</option>
+          <option value="HIGH">HIGH</option>
+          <option value="MEDIUM">MEDIUM</option>
+          <option value="LOW">LOW</option>
+        </select>
+      </div>
+      <div id="count-label" class="muted">0 tasks shown</div>
+    </div>
+
+    <section class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Deadline & Countdown</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tasks-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <dialog id="detail-modal">
+    <div class="modal-head">
+      <strong id="detail-title">Task Details</strong>
+      <button onclick="document.getElementById('detail-modal').close()">Close</button>
+    </div>
+    <div id="detail-body" class="modal-body"></div>
+  </dialog>
+
+  <dialog id="upload-modal">
+    <div class="modal-head">
+      <strong>Upload Document (.pdf, .docx, .txt, .md)</strong>
+      <button onclick="document.getElementById('upload-modal').close()">Close</button>
+    </div>
+    <div class="modal-body">
+      <form id="upload-form" class="form-grid">
+        <div class="form-row">
+          <label for="upload-file">Document File</label>
+          <input id="upload-file" type="file" accept=".pdf,.docx,.txt,.md" required>
+        </div>
+        <div class="controls">
+          <label><input id="upload-heuristic" type="checkbox"> Force offline heuristic</label>
+          <label><input id="upload-notify" type="checkbox" checked> Send notifications</label>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="primary">Upload and Ingest</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="add-modal">
+    <div class="modal-head">
+      <strong>Add Academic Task</strong>
+      <button onclick="document.getElementById('add-modal').close()">Close</button>
+    </div>
+    <div class="modal-body">
+      <form id="add-form" class="form-grid">
+        <div class="form-row">
+          <label for="add-title">Title</label>
+          <input id="add-title" type="text" placeholder="e.g. Raft Consensus Lab" required>
+        </div>
+        <div class="form-row">
+          <label for="add-course">Course</label>
+          <input id="add-course" type="text" placeholder="e.g. Distributed Systems">
+        </div>
+        <div class="form-row">
+          <label for="add-deadline">Deadline (YYYY-MM-DD HH:MM)</label>
+          <input id="add-deadline" type="text" placeholder="2026-12-10 23:59">
+        </div>
+        <div class="form-row">
+          <label for="add-priority">Priority</label>
+          <select id="add-priority">
+            <option value="HIGH">HIGH</option>
+            <option value="MEDIUM" selected>MEDIUM</option>
+            <option value="LOW">LOW</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="add-summary">Summary</label>
+          <textarea id="add-summary" rows="3" placeholder="Short description of deliverables or requirements"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="primary">Create Task</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    let tasksCache = [];
+
+    function getToken() {
+      return sessionStorage.getItem("academic_token") || "";
+    }
+
+    async function apiFetch(url, options = {}) {
+      const headers = new Headers(options.headers || {});
+      const tok = getToken();
+      if (tok) headers.set("Authorization", "Bearer " + tok);
+      const resp = await fetch(url, { ...options, headers });
+      if (resp.status === 401) {
+        document.getElementById("auth-banner").classList.add("show");
+        throw new Error("Unauthorized: enter bearer token");
+      }
+      document.getElementById("auth-banner").classList.remove("show");
+      return resp;
+    }
+
+    function showNotice(text) {
+      document.getElementById("msg-text").textContent = text;
+      document.getElementById("msg-banner").classList.add("show");
+    }
+
+    function esc(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatCountdown(task) {
+      if (!task.deadline_utc) return { text: "No deadline", cls: "muted" };
+      if (task.status === "COMPLETED" || task.status === "ARCHIVED") {
+        return { text: task.deadline_raw || task.deadline_utc.slice(0, 16), cls: "muted" };
+      }
+      const diffMs = new Date(task.deadline_utc).getTime() - Date.now();
+      const diffHours = diffMs / 3600000;
+      if (diffHours <= 0) {
+        const hrs = Math.max(1, Math.round(Math.abs(diffHours)));
+        return { text: `Overdue by ${hrs}h`, cls: "urgency-overdue" };
+      }
+      if (diffHours < 48) {
+        return { text: `Due in ${Math.max(1, Math.round(diffHours))}h`, cls: "urgency-soon" };
+      }
+      const days = Math.round(diffHours / 24);
+      return { text: `Due in ${days}d`, cls: "muted" };
+    }
+
+    async function loadTasks() {
+      try {
+        const resp = await apiFetch("/api/tasks");
+        const data = await resp.json();
+        tasksCache = data.tasks || [];
+        renderTable();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
+    function renderTable() {
+      const q = document.getElementById("search").value.trim().toLowerCase();
+      const sf = document.getElementById("status-filter").value;
+      const pf = document.getElementById("priority-filter").value;
+
+      const now = Date.now();
+      const openTasks = tasksCache.filter(t => t.status === "PENDING" || t.status === "IN_PROGRESS");
+      const soonTasks = openTasks.filter(t => {
+        if (!t.deadline_utc) return false;
+        const hrs = (new Date(t.deadline_utc).getTime() - now) / 3600000;
+        return hrs > 0 && hrs <= 72;
+      });
+      const overdueTasks = openTasks.filter(t => t.deadline_utc && new Date(t.deadline_utc).getTime() <= now);
+      const completedTasks = tasksCache.filter(t => t.status === "COMPLETED");
+
+      document.getElementById("stat-open").textContent = openTasks.length;
+      document.getElementById("stat-soon").textContent = soonTasks.length;
+      document.getElementById("stat-overdue").textContent = overdueTasks.length;
+      document.getElementById("stat-done").textContent = completedTasks.length;
+
+      const filtered = tasksCache.filter(t => {
+        if (sf && t.status !== sf) return false;
+        if (pf && t.priority !== pf) return false;
+        if (q) {
+          const hay = `${t.id} ${t.title} ${t.course}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      document.getElementById("count-label").textContent = `${filtered.length} of ${tasksCache.length} task(s)`;
+      const tbody = document.getElementById("tasks-body");
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No matching tasks recorded.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(t => {
+        const cd = formatCountdown(t);
+        const prioCls = t.priority === "HIGH" ? "high" : (t.priority === "LOW" ? "low" : "medium");
+        const statusCls = t.status === "COMPLETED" ? "done" : (t.status === "ARCHIVED" ? "muted-b" : "pending");
+        const hasIcs = Boolean(t.ics_file);
+        const isDone = t.status === "COMPLETED";
+        return `
+          <tr>
+            <td>
+              <div><strong>#${t.id} ${esc(t.title)}</strong></div>
+              <div class="muted">${esc(t.course)} <span class="mono">(${esc(t.kind)})</span></div>
+            </td>
+            <td>
+              <div class="mono">${esc(t.deadline_raw || "Unspecified")}</div>
+              <div class="${cd.cls}">${esc(cd.text)}</div>
+            </td>
+            <td><span class="badge ${prioCls}">${esc(t.priority)}</span></td>
+            <td><span class="badge ${statusCls}">${esc(t.status)}</span></td>
+            <td>
+              <div class="actions">
+                <button onclick="openDetail(${t.id})">Details</button>
+                <button onclick="markDone(${t.id})" ${isDone ? "disabled" : ""}>Done</button>
+                <button onclick="snoozeTask(${t.id})" ${isDone ? "disabled" : ""}>Snooze</button>
+                <button onclick="downloadIcs('${esc(t.ics_file || "")}')" ${hasIcs ? "" : "disabled"}>.ics</button>
+                <button class="danger" onclick="deleteTask(${t.id})">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function markDone(id) {
+      try {
+        const resp = await apiFetch(`/api/tasks/${id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "COMPLETED" })
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        showNotice(`Task #${id} marked as COMPLETED.`);
+        await loadTasks();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
+    async function snoozeTask(id) {
+      try {
+        const resp = await apiFetch(`/api/tasks/${id}/snooze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hours: 24 })
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        showNotice(`Snoozed reminders for task #${id} by 24h.`);
+        await loadTasks();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
+    async function deleteTask(id) {
+      try {
+        const resp = await apiFetch(`/api/tasks/${id}`, { method: "DELETE" });
+        if (!resp.ok) throw new Error(await resp.text());
+        showNotice(`Deleted task #${id}.`);
+        await loadTasks();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
+    async function downloadIcs(filename) {
+      if (!filename) return;
+      try {
+        const resp = await apiFetch(`/api/calendar/${encodeURIComponent(filename)}`);
+        if (!resp.ok) throw new Error("Failed downloading .ics file");
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
+    async function exportTasks(fmt) {
+      try {
+        const resp = await apiFetch(`/api/tasks/export?format=${fmt}`);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `academic-tasks.${fmt}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
+    function openDetail(id) {
+      const t = tasksCache.find(item => item.id === id);
+      if (!t) return;
+      document.getElementById("detail-title").textContent = `#${t.id} ${t.title}`;
+      const subtasks = (t.subtasks || []).length
+        ? `<ul class="checklist">${t.subtasks.map(s => `<li>${esc(s)}</li>`).join("")}</ul>`
+        : '<p class="muted">No subtasks recorded.</p>';
+      const deliverables = (t.deliverables || []).length
+        ? esc(t.deliverables.join(", "))
+        : "Unspecified";
+
+      const gcalBtn = t.google_calendar_url
+        ? `<a class="btn-link primary" href="${esc(t.google_calendar_url)}" target="_blank" rel="noopener">Add to Google Calendar</a>`
+        : "";
+      const icsBtn = t.ics_file
+        ? `<button onclick="downloadIcs('${esc(t.ics_file)}')">Download .ics</button>`
+        : "";
+
+      document.getElementById("detail-body").innerHTML = `
+        <p>${esc(t.summary)}</p>
+        <div class="detail-grid">
+          <div class="detail-box"><div class="stat-label">Course</div><div>${esc(t.course)}</div></div>
+          <div class="detail-box"><div class="stat-label">Deadline</div><div class="mono">${esc(t.deadline_raw || "Unspecified")}</div></div>
+          <div class="detail-box"><div class="stat-label">Effort & Source</div><div>${t.estimated_hours}h via ${esc(t.extractor)}</div></div>
+          <div class="detail-box"><div class="stat-label">Deliverables</div><div>${deliverables}</div></div>
+        </div>
+        <strong>Subtask Checklist</strong>
+        ${subtasks}
+        <div class="modal-actions">
+          ${gcalBtn}
+          ${icsBtn}
+          <button onclick="markDone(${t.id}); document.getElementById('detail-modal').close();">Mark Done</button>
+          <button onclick="snoozeTask(${t.id}); document.getElementById('detail-modal').close();">Snooze 24h</button>
+        </div>
+      `;
+      document.getElementById("detail-modal").showModal();
+    }
+
+    async function runCronTick() {
+      try {
+        const resp = await apiFetch("/api/cron-tick", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dry_run: true })
+        });
+        const data = await resp.json();
+        showNotice(`Cron dry-run: digest_due=${data.digest_due}, reminders_due=${(data.due_reminders || []).length}.`);
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
+    document.getElementById("search").addEventListener("input", renderTable);
+    document.getElementById("status-filter").addEventListener("change", renderTable);
+    document.getElementById("priority-filter").addEventListener("change", renderTable);
+    document.getElementById("refresh-btn").addEventListener("click", loadTasks);
+    document.getElementById("cron-btn").addEventListener("click", runCronTick);
+    document.getElementById("export-json-btn").addEventListener("click", () => exportTasks("json"));
+    document.getElementById("export-csv-btn").addEventListener("click", () => exportTasks("csv"));
+    document.getElementById("theme-btn").addEventListener("click", () => {
+      const root = document.documentElement;
+      root.dataset.theme = root.dataset.theme === "light" ? "" : "light";
+    });
+    document.getElementById("token-save").addEventListener("click", () => {
+      sessionStorage.setItem("academic_token", document.getElementById("token-input").value.trim());
+      loadTasks();
+    });
+    document.getElementById("open-upload-btn").addEventListener("click", () => {
+      document.getElementById("upload-modal").showModal();
+    });
+    document.getElementById("open-add-btn").addEventListener("click", () => {
+      document.getElementById("add-modal").showModal();
+    });
+
+    document.getElementById("upload-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById("upload-file");
+      if (!fileInput.files.length) return;
+      const form = new FormData();
+      form.append("file", fileInput.files[0]);
+      const heuristic = document.getElementById("upload-heuristic").checked;
+      const notify = document.getElementById("upload-notify").checked;
+      try {
+        const resp = await apiFetch(`/api/upload?heuristic=${heuristic}&notify=${notify}`, {
+          method: "POST",
+          body: form
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Upload failed");
+        document.getElementById("upload-modal").close();
+        fileInput.value = "";
+        showNotice(`${data.duplicate ? "Duplicate skipped" : "Ingested"} task #${data.task.id}: ${data.task.title}`);
+        await loadTasks();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    });
+
+    document.getElementById("add-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = {
+        title: document.getElementById("add-title").value.trim(),
+        course: document.getElementById("add-course").value.trim() || null,
+        deadline: document.getElementById("add-deadline").value.trim() || null,
+        priority: document.getElementById("add-priority").value,
+        summary: document.getElementById("add-summary").value.trim() || null
+      };
+      try {
+        const resp = await apiFetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Create failed");
+        document.getElementById("add-modal").close();
+        document.getElementById("add-form").reset();
+        showNotice(`Created task #${data.task.id}: ${data.task.title}`);
+        await loadTasks();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    });
+
+    loadTasks();
+  </script>
+</body>
+</html>

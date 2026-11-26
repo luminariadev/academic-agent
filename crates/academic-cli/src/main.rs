@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use academic_core::config::{load_dotenv_if_present, Config};
 use academic_core::cron_engine::run_cron_tick;
+use academic_core::discord_bot::{register_slash_commands, run_discord_gateway};
 use academic_core::extract::extract_from_text;
 use academic_core::notify::{build_task_embed, send_discord_embed, send_via_hermes};
 use academic_core::store::{ExportFormat, TaskStatus, TaskStore};
@@ -108,7 +109,12 @@ enum Commands {
     },
     /// Send a synthetic test notification via configured Discord or Hermes transport
     TestDiscord,
-    /// Start the Axum HTTP REST API, webdelta webhook receiver, and Streamable HTTP /mcp server
+    /// Manage interactive Discord slash commands and the persistent Gateway bot
+    Discord {
+        #[command(subcommand)]
+        action: DiscordCommands,
+    },
+    /// Start the web dashboard, REST API, webdelta webhook receiver, and /mcp server
     Serve {
         #[arg(long)]
         bind: Option<String>,
@@ -118,6 +124,8 @@ enum Commands {
         with_cron: bool,
         #[arg(long)]
         with_watch: bool,
+        #[arg(long)]
+        with_discord_bot: bool,
     },
     /// Start the Model Context Protocol server (stdio by default, or Streamable HTTP with --http)
     Mcp {
@@ -126,6 +134,17 @@ enum Commands {
         #[arg(long)]
         token: Option<String>,
     },
+}
+
+#[derive(Subcommand)]
+enum DiscordCommands {
+    /// Register slash commands (/tasks, /upcoming, /done, /snooze, /add, /digest) with Discord
+    RegisterCommands {
+        #[arg(long)]
+        guild: Option<String>,
+    },
+    /// Start the interactive Discord Gateway WebSocket listener
+    Bot,
 }
 
 fn init_logging(verbose: bool) {
@@ -472,14 +491,51 @@ async fn run(cli: Cli) -> academic_core::Result<()> {
             println!("{}", serde_json::to_string_pretty(&receipts)?);
             Ok(())
         }
+        Commands::Discord { action } => {
+            let cfg = load_config(&cli.config, cli.db.as_deref())?;
+            match action {
+                DiscordCommands::RegisterCommands { guild } => {
+                    let count = register_slash_commands(&cfg.discord, guild.as_deref()).await?;
+                    if cli.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&json!({ "registered_commands": count }))?
+                        );
+                    } else {
+                        println!("Registered {count} Discord slash command(s).");
+                    }
+                    Ok(())
+                }
+                DiscordCommands::Bot => {
+                    let store = TaskStore::open(&cfg.general.db_path)?;
+                    let (tx, rx) = watch::channel(false);
+                    let ctrl_tx = tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tokio::signal::ctrl_c().await;
+                        let _ = ctrl_tx.send(true);
+                    });
+                    run_discord_gateway(cfg, store, rx).await
+                }
+            }
+        }
         Commands::Serve {
             bind,
             token,
             with_cron,
             with_watch,
+            with_discord_bot,
         } => {
             let cfg = load_config(&cli.config, cli.db.as_deref())?;
-            server::run_serve(cli.config, cfg, bind, token, with_cron, with_watch).await
+            server::run_serve(
+                cli.config,
+                cfg,
+                bind,
+                token,
+                with_cron,
+                with_watch,
+                with_discord_bot,
+            )
+            .await
         }
         Commands::Mcp { http, token } => {
             let cfg = load_config(&cli.config, cli.db.as_deref())?;

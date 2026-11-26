@@ -17,8 +17,8 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-academic-core = { version = "0.1.1", path = "../academic-core" }
-academic-mcp = { version = "0.1.1", path = "../academic-mcp" }
+academic-core = { version = "0.2.0", path = "../academic-core" }
+academic-mcp = { version = "0.2.0", path = "../academic-mcp" }
 axum.workspace = true
 chrono.workspace = true
 clap.workspace = true

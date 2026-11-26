@@ -6,6 +6,7 @@ use std::time::Duration;
 use academic_core::calendar::{create_ics_event, parse_deadline_in_tz, CalendarEventSpec};
 use academic_core::config::Config;
 use academic_core::cron_engine::run_cron_tick;
+use academic_core::discord_bot::run_discord_gateway;
 use academic_core::error::Error;
 use academic_core::extract::{extract_from_text, Priority, TaskKind};
 use academic_core::notify::dispatch_new_task;
@@ -16,7 +17,7 @@ use academic_mcp::{is_bearer_authorized, mcp_route, McpHttpState, McpServer};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, Path as AxumPath, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use chrono::Utc;
@@ -513,6 +514,30 @@ async fn digest_handler(
     ))
 }
 
+const DASHBOARD_HTML: &str = include_str!("dashboard.html");
+
+async fn dashboard_handler() -> Html<&'static str> {
+    Html(DASHBOARD_HTML)
+}
+
+#[derive(Deserialize)]
+struct CronTickBody {
+    #[serde(default = "default_true")]
+    dry_run: bool,
+}
+
+async fn cron_tick_handler(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<CronTickBody>,
+) -> std::result::Result<Json<Value>, ApiError> {
+    require_bearer(&state, &headers)?;
+    let report = run_cron_tick(&state.store, &state.config, Utc::now(), body.dry_run).await?;
+    Ok(Json(
+        serde_json::to_value(report).map_err(|e| ApiError::Internal(e.to_string()))?,
+    ))
+}
+
 async fn download_calendar_handler(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -590,6 +615,7 @@ pub fn build_app_router(
     });
 
     Router::new()
+        .route("/", get(dashboard_handler))
         .route("/health", get(health_handler))
         .route(
             "/api/tasks",
@@ -606,13 +632,15 @@ pub fn build_app_router(
         .route("/api/upload", post(upload_handler))
         .route("/api/webhooks/webdelta", post(webdelta_webhook_handler))
         .route("/api/digest", post(digest_handler))
+        .route("/api/cron-tick", post(cron_tick_handler))
         .route("/api/calendar/{filename}", get(download_calendar_handler))
         .layer(DefaultBodyLimit::max(max_body))
         .with_state(app_state)
         .merge(mcp_route(mcp_state))
 }
 
-/// Runs the embedded HTTP server with optional background cron scheduler and folder watcher.
+/// Runs the embedded HTTP server with optional background cron scheduler, folder watcher,
+/// and interactive Discord Gateway bot.
 pub async fn run_serve(
     config_path: PathBuf,
     config: Config,
@@ -620,6 +648,7 @@ pub async fn run_serve(
     token_override: Option<String>,
     with_cron: bool,
     with_watch: bool,
+    with_discord_bot: bool,
 ) -> academic_core::Result<()> {
     config.ensure_runtime_dirs()?;
     let store = TaskStore::open(&config.general.db_path)?;
@@ -666,6 +695,18 @@ pub async fn run_serve(
         }));
     }
 
+    let mut bot_handle = None;
+    if with_discord_bot {
+        let b_cfg = config.clone();
+        let b_store = store.clone();
+        let b_rx = shutdown_rx.clone();
+        bot_handle = Some(tokio::spawn(async move {
+            if let Err(e) = run_discord_gateway(b_cfg, b_store, b_rx).await {
+                error!("Discord Gateway exited with error: {e}");
+            }
+        }));
+    }
+
     let listener = TcpListener::bind(&bind).await?;
     let local_addr: SocketAddr = listener.local_addr()?;
     info!("academic-agent server listening on http://{local_addr}");
@@ -683,6 +724,9 @@ pub async fn run_serve(
         let _ = h.await;
     }
     if let Some(h) = watch_handle {
+        let _ = h.await;
+    }
+    if let Some(h) = bot_handle {
         let _ = h.await;
     }
     Ok(())
