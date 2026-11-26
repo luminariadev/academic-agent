@@ -1,0 +1,8 @@
+Course: Distributed Systems
+Title: Raft Leader Election and Log Replication Lab
+Deadline: 2026-12-10 23:59
+
+Requirements:
+1. Implement leader election timeouts, RequestVote RPC, and AppendEntries heartbeats.
+2. Verify split-vote recovery under simulated network partitions.
+3. Submit source repository link and a concise PDF benchmark report.

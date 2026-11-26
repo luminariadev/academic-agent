@@ -1,0 +1,54 @@
+# Example configuration for academic-agent
+
+[general]
+inbox_dir = "inbox"
+archive_dir = "archive"
+calendar_dir = "data/calendar"
+db_path = "data/state.redb"
+timezone = "Asia/Jakarta"
+backup_processed = true
+default_duration_hours = 2
+
+[llm]
+api_base = "${ACADEMIC_LLM_API_BASE}"
+api_key = "${ACADEMIC_LLM_API_KEY}"
+model = "gpt-4o-mini"
+timeout_secs = 45
+fallback_to_heuristic = true
+temperature = 0.1
+
+[discord]
+enabled = true
+mode = "auto"
+bot_token = "${DISCORD_BOT_TOKEN}"
+channel_id = "${DISCORD_CHANNEL_ID}"
+webhook_url = "${DISCORD_WEBHOOK_URL}"
+timeout_secs = 15
+max_retries = 3
+
+[hermes]
+enabled = false
+binary_path = "hermes"
+target = "${HERMES_TARGET}"
+timeout_secs = 15
+fallback_on_discord_error = false
+
+[cron]
+enabled = true
+digest_cron = "0 7 * * *"
+reminder_hours = [72, 24, 3]
+alert_overdue = true
+tick_interval_secs = 60
+
+[server]
+bind = "127.0.0.1:8080"
+api_token = "${ACADEMIC_API_TOKEN}"
+allowed_origins = ["http://127.0.0.1:8080", "http://localhost:8080"]
+max_upload_bytes = 16777216
+webdelta_webhook_secret = "${WEBDELTA_WEBHOOK_SECRET}"
+
+[n8n]
+enabled = false
+webhook_url = "${N8N_WEBHOOK_URL}"
+secret = "${N8N_WEBHOOK_SECRET}"
+timeout_secs = 10

@@ -1,0 +1,178 @@
+{
+  "name": "Academic Agent - Task Extraction and Discord Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "academic-task",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "academic-agent-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.body || $input.first().json;\nif (raw.event === 'new_academic_task' && raw.task) {\n  return [{\n    json: {\n      mode: 'pre_extracted',\n      task: raw.task,\n      calendar: raw.calendar || null,\n      filename: raw.task.source_file || 'task.txt',\n      received_at: new Date().toISOString()\n    }\n  }];\n}\n\nconst text = String(raw.content || raw.text || '').trim();\nif (!text) {\n  throw new Error('Webhook payload must contain either task text (content/text) or a pre-extracted task object.');\n}\n\nconst baseUrl = ($env.ACADEMIC_LLM_API_BASE || $env.ROUTER_API_BASE || 'http://127.0.0.1:20128/v1').replace(/\\/+$/, '');\nconst model = $env.ROUTER_MODEL || 'gpt-4o-mini';\nconst filename = String(raw.filename || raw.file_name || 'document.txt');\nconst systemPrompt = 'Extract structured academic tasks from text in Indonesian or English. Return ONLY raw JSON: {\"is_academic\":true,\"kind\":\"assignment|quiz|exam|syllabus|announcement|general\",\"course\":\"Course\",\"title\":\"Title\",\"deadline\":\"YYYY-MM-DD HH:MM or null\",\"estimated_hours\":2,\"priority\":\"HIGH|MEDIUM|LOW\",\"summary\":\"Short summary\",\"subtasks\":[\"Step 1\"],\"deliverables\":[\"PDF\"]}. Default missing times to 23:59.';\n\nreturn [{\n  json: {\n    mode: 'llm',\n    llm_url: `${baseUrl}/chat/completions`,\n    llm_body_json: JSON.stringify({\n      model,\n      stream: false,\n      temperature: 0.1,\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: `Document: ${filename}\\n\\nContent:\\n${text.slice(0, 12000)}` }\n      ]\n    }),\n    filename,\n    received_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-preprocess",
+      "name": "Preprocess and Serialize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.llm_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.ACADEMIC_LLM_API_KEY || $env.ROUTER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.llm_body_json }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-llm-request",
+      "name": "LLM Extraction Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst rawContent = resp?.choices?.[0]?.message?.content;\nif (!rawContent) {\n  throw new Error('LLM endpoint did not return a valid completion message.');\n}\n\nlet cleaned = String(rawContent).trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '').trim();\nlet task;\ntry {\n  task = JSON.parse(cleaned);\n} catch {\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (!match) throw new Error('LLM output did not contain valid JSON.');\n  task = JSON.parse(match[0]);\n}\n\nconst course = String(task.course || 'General Course').slice(0, 200);\nconst title = String(task.title || 'Academic Task').slice(0, 200);\nconst summary = String(task.summary || 'Extracted academic task.').slice(0, 2000);\nconst priority = String(task.priority || 'MEDIUM').toUpperCase();\nconst deadline = task.deadline ? String(task.deadline).trim() : '';\n\nconst tzOffsetMinutes = 7 * 60;\nlet gcalUrl = '';\nif (deadline) {\n  const isoMatch = deadline.match(/(20\\d{2})-(\\d{2})-(\\d{2})(?:[ T](\\d{1,2})[:.](\\d{2}))?/);\n  if (isoMatch) {\n    const [ , y, m, d, hh = '23', mm = '59' ] = isoMatch;\n    const localMs = Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), 0) - tzOffsetMinutes * 60 * 1000;\n    const endUtc = new Date(localMs);\n    const startUtc = new Date(localMs - 2 * 3600 * 1000);\n    const fmt = (dt) => dt.toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\n    const params = new URLSearchParams({\n      action: 'TEMPLATE',\n      text: `[${course}] ${title}`.slice(0, 70),\n      dates: `${fmt(startUtc)}/${fmt(endUtc)}`,\n      details: summary.slice(0, 100),\n      location: 'Online / Campus LMS'\n    });\n    gcalUrl = `https://calendar.google.com/calendar/render?${params.toString()}`;\n    if (gcalUrl.length > 512) {\n      params.delete('details');\n      gcalUrl = `https://calendar.google.com/calendar/render?${params.toString()}`;\n    }\n  }\n}\n\nconst color = priority === 'HIGH' ? 0xED4245 : (priority === 'LOW' ? 0x57F287 : 0xFEE75C);\nconst fields = [\n  { name: 'Course', value: course || 'General Course', inline: true },\n  { name: 'Deadline', value: deadline || 'Unspecified', inline: true },\n  { name: 'Priority', value: priority, inline: true }\n];\nif (Array.isArray(task.subtasks) && task.subtasks.length > 0) {\n  const list = task.subtasks.slice(0, 6).map((s) => `- ${s}`).join('\\n').slice(0, 1020);\n  if (list) fields.push({ name: 'Checklist', value: list, inline: false });\n}\n\nconst discordPayload = {\n  embeds: [{\n    title: `[${course}] ${title}`.slice(0, 256),\n    description: summary,\n    color,\n    fields,\n    footer: { text: 'academic-agent | n8n workflow' }\n  }]\n};\nif (gcalUrl && gcalUrl.length <= 512) {\n  discordPayload.components = [{\n    type: 1,\n    components: [{\n      type: 2,\n      style: 5,\n      label: 'Add to Google Calendar',\n      url: gcalUrl\n    }]\n  }];\n}\n\nreturn [{\n  json: {\n    task,\n    google_calendar_url: gcalUrl || null,\n    discord_url: `https://discord.com/api/v10/channels/${$env.DISCORD_CHANNEL_ID}/messages`,\n    discord_payload_json: JSON.stringify(discordPayload)\n  }\n}];"
+      },
+      "id": "node-format-payload",
+      "name": "Build Calendar and Discord Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.discord_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bot {{ $env.DISCORD_BOT_TOKEN }}"
+            },
+            {
+              "name": "User-Agent",
+              "value": "DiscordBot (academic-agent, 0.1.0)"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.discord_payload_json }}",
+        "options": {}
+      },
+      "id": "node-discord-send",
+      "name": "Send Discord Embed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'success', task: $('Build Calendar and Discord Payload').first().json.task, google_calendar_url: $('Build Calendar and Discord Payload').first().json.google_calendar_url }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1380, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Preprocess and Serialize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preprocess and Serialize": {
+      "main": [
+        [
+          {
+            "node": "LLM Extraction Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Extraction Request": {
+      "main": [
+        [
+          {
+            "node": "Build Calendar and Discord Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Calendar and Discord Payload": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Embed": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0.1.0"
+}
