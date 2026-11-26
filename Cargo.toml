@@ -1,0 +1,53 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/academic-core",
+    "crates/academic-mcp",
+    "crates/academic-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+repository = "https://github.com/luminariadev/academic-agent"
+keywords = ["automation", "academic", "discord", "calendar", "mcp"]
+categories = ["command-line-utilities", "web-programming"]
+
+[workspace.lints.clippy]
+all = "warn"
+
+[workspace.dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+clap = { version = "4", features = ["derive"] }
+cron = "0.13"
+hex = "0.4"
+hmac = "0.12"
+lopdf = "0.35"
+notify = "7"
+quick-xml = "0.37"
+redb = "2"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["native-tls", "json", "gzip", "deflate", "multipart"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal", "io-std", "io-util", "net", "sync", "process", "fs"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tempfile = "3"
+assert_cmd = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

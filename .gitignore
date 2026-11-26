@@ -1,0 +1,11 @@
+/target
+.env
+.env.*
+data/*.redb
+data/*.db
+data/calendar/*.ics
+inbox/
+archive/
+*.log
+.DS_Store
+Thumbs.db
