@@ -37,6 +37,10 @@ flowchart LR
 
 ## Installation
 
+### Prebuilt Binaries
+
+Download standalone archives for Linux (`x86_64`), Windows (`x86_64`), and macOS (`x86_64` and Apple Silicon) with `SHA256SUMS.txt` from [GitHub Releases](https://github.com/luminariadev/academic-agent/releases).
+
 ### Build from Source
 
 Requires Rust 1.82 or newer:

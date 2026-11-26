@@ -282,7 +282,14 @@ pub async fn send_discord_embed(
     for attempt in 1..=max_attempts {
         let mut req = client
             .post(&target_url)
-            .header("User-Agent", "DiscordBot (academic-agent, 0.1.0)")
+            .header(
+                "User-Agent",
+                concat!(
+                    "DiscordBot (academic-agent, ",
+                    env!("CARGO_PKG_VERSION"),
+                    ")"
+                ),
+            )
             .json(&body);
         if let Some(ref auth) = auth_header {
             req = req.header("Authorization", auth);

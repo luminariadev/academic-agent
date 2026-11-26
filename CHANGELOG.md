@@ -4,6 +4,17 @@ All notable changes to `academic-agent` are documented in this file.
 
 The format follows Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.1.1] - 2026-11-27
+
+### Added
+
+- Automated multi-OS GitHub Release workflow (`.github/workflows/release.yml`) publishing prebuilt binaries for Linux, Windows, and macOS (Intel and Apple Silicon) along with `SHA256SUMS.txt` on every `v*.*.*` tag.
+- Prebuilt release installation instructions in `README.md`.
+
+### Changed
+
+- Dynamic `CARGO_PKG_VERSION` string in Discord Bot API `User-Agent` header.
+
 ## [0.1.0] - 2026-11-27
 
 ### Added
