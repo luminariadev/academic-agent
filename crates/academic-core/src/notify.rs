@@ -197,12 +197,71 @@ fn is_configured_value(raw: &str) -> bool {
     !t.is_empty() && !t.contains("${")
 }
 
+/// Builds an interactive Discord Action Row containing `Mark Done`, `Snooze 24h`,
+/// and an optional `Add to Google Calendar` link button when URL fits within 512 chars.
+pub fn build_task_action_components(task_id: u64, gcal_url: Option<&str>) -> Value {
+    let mut buttons = vec![
+        json!({
+            "type": 2,
+            "style": 3,
+            "label": "Mark Done",
+            "custom_id": format!("academic:done:{task_id}")
+        }),
+        json!({
+            "type": 2,
+            "style": 2,
+            "label": "Snooze 24h",
+            "custom_id": format!("academic:snooze24:{task_id}")
+        }),
+    ];
+    if let Some(link) = gcal_url {
+        let trimmed = link.trim();
+        if !trimmed.is_empty() && trimmed.len() <= 512 {
+            buttons.push(json!({
+                "type": 2,
+                "style": 5,
+                "label": "Google Calendar",
+                "url": trimmed
+            }));
+        }
+    }
+    json!([{
+        "type": 1,
+        "components": buttons
+    }])
+}
+
 /// Sends a Discord embed payload via Bot REST API v10 (with optional link button) or Webhook,
 /// handling HTTP `429 Retry-After` and transient 5xx responses with bounded retries.
 pub async fn send_discord_embed(
     cfg: &DiscordConfig,
     embed: Value,
     button_url: Option<&str>,
+) -> Result<DispatchReceipt> {
+    let components = button_url.and_then(|link| {
+        let trimmed = link.trim();
+        if trimmed.is_empty() || trimmed.len() > 512 {
+            None
+        } else {
+            Some(json!([{
+                "type": 1,
+                "components": [{
+                    "type": 2,
+                    "style": 5,
+                    "label": "Add to Google Calendar",
+                    "url": trimmed
+                }]
+            }]))
+        }
+    });
+    send_discord_message_with_components(cfg, embed, components).await
+}
+
+/// Sends a Discord embed payload with an arbitrary Action Row `components` array in Bot mode.
+pub async fn send_discord_message_with_components(
+    cfg: &DiscordConfig,
+    embed: Value,
+    components: Option<Value>,
 ) -> Result<DispatchReceipt> {
     if !cfg.enabled {
         return Err(Error::Notify("discord notifier is disabled".to_string()));
@@ -245,17 +304,9 @@ pub async fn send_discord_embed(
         let base = cfg.api_base.trim().trim_end_matches('/');
         let url = format!("{base}/channels/{}/messages", cfg.channel_id.trim());
         let mut payload = json!({ "embeds": [embed] });
-        if let Some(link) = button_url {
-            if !link.trim().is_empty() && link.len() <= 512 {
-                payload["components"] = json!([{
-                    "type": 1,
-                    "components": [{
-                        "type": 2,
-                        "style": 5,
-                        "label": "Add to Google Calendar",
-                        "url": link
-                    }]
-                }]);
+        if let Some(comp) = components {
+            if !comp.is_null() {
+                payload["components"] = comp;
             }
         }
         (
@@ -452,7 +503,12 @@ pub async fn dispatch_new_task(
                 && is_configured_value(&discord.bot_token)
                 && is_configured_value(&discord.channel_id));
         let embed = build_task_embed(task, gcal, !is_bot_mode);
-        match send_discord_embed(discord, embed, if is_bot_mode { gcal } else { None }).await {
+        let components = if is_bot_mode {
+            Some(build_task_action_components(task.id, gcal))
+        } else {
+            None
+        };
+        match send_discord_message_with_components(discord, embed, components).await {
             Ok(r) => {
                 discord_ok = r.success;
                 receipts.push(r);
@@ -566,6 +622,7 @@ mod tests {
             allowed_users: vec![],
             timeout_secs: 5,
             max_retries: 2,
+            ..DiscordConfig::default()
         };
 
         let long_field = "x".repeat(2000);

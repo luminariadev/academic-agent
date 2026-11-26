@@ -5,7 +5,8 @@ use tracing::warn;
 use crate::config::{parse_cron_schedule, Config};
 use crate::error::Result;
 use crate::notify::{
-    build_digest_embed, build_reminder_embed, send_discord_embed, send_via_hermes,
+    build_digest_embed, build_reminder_embed, build_task_action_components, send_discord_embed,
+    send_discord_message_with_components, send_via_hermes,
 };
 use crate::store::{TaskRecord, TaskStatus, TaskStore};
 
@@ -265,7 +266,13 @@ pub async fn run_cron_tick(
         let mut sent_ok = false;
 
         if config.discord.enabled {
-            match send_discord_embed(&config.discord, embed, None).await {
+            let components = build_task_action_components(
+                item.task.id,
+                item.task.google_calendar_url.as_deref(),
+            );
+            match send_discord_message_with_components(&config.discord, embed, Some(components))
+                .await
+            {
                 Ok(_) => sent_ok = true,
                 Err(e) => {
                     warn!("Failed dispatching reminder {}: {e}", item.key);

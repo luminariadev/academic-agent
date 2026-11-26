@@ -85,16 +85,19 @@ pub enum DiscordMode {
     Webhook,
 }
 
-/// Discord REST API v10 and Webhook settings.
+/// Discord REST API v10, Gateway Bot, and Webhook settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DiscordConfig {
     pub enabled: bool,
     pub mode: DiscordMode,
     pub bot_token: String,
+    pub application_id: String,
+    pub guild_id: String,
     pub channel_id: String,
     pub webhook_url: String,
     pub api_base: String,
+    pub gateway_url: String,
     pub allowed_users: Vec<String>,
     pub timeout_secs: u64,
     pub max_retries: u32,
@@ -106,9 +109,12 @@ impl Default for DiscordConfig {
             enabled: true,
             mode: DiscordMode::Auto,
             bot_token: "${DISCORD_BOT_TOKEN}".to_string(),
+            application_id: "${DISCORD_CLIENT_ID}".to_string(),
+            guild_id: "${DISCORD_GUILD_ID}".to_string(),
             channel_id: "${DISCORD_CHANNEL_ID}".to_string(),
             webhook_url: "${DISCORD_WEBHOOK_URL}".to_string(),
             api_base: "https://discord.com/api/v10".to_string(),
+            gateway_url: String::new(),
             allowed_users: Vec::new(),
             timeout_secs: 15,
             max_retries: 3,
@@ -344,9 +350,13 @@ impl Config {
         self.llm.model = expand_env_vars_with(&self.llm.model, &mut lookup);
 
         self.discord.bot_token = expand_env_vars_with(&self.discord.bot_token, &mut lookup);
+        self.discord.application_id =
+            expand_env_vars_with(&self.discord.application_id, &mut lookup);
+        self.discord.guild_id = expand_env_vars_with(&self.discord.guild_id, &mut lookup);
         self.discord.channel_id = expand_env_vars_with(&self.discord.channel_id, &mut lookup);
         self.discord.webhook_url = expand_env_vars_with(&self.discord.webhook_url, &mut lookup);
         self.discord.api_base = expand_env_vars_with(&self.discord.api_base, &mut lookup);
+        self.discord.gateway_url = expand_env_vars_with(&self.discord.gateway_url, &mut lookup);
 
         self.hermes.binary_path = expand_env_vars_with(&self.hermes.binary_path, &mut lookup);
         self.hermes.target = expand_env_vars_with(&self.hermes.target, &mut lookup);
@@ -476,6 +486,8 @@ temperature = 0.1
 enabled = true
 mode = "auto"
 bot_token = "${DISCORD_BOT_TOKEN}"
+application_id = "${DISCORD_CLIENT_ID}"
+guild_id = "${DISCORD_GUILD_ID}"
 channel_id = "${DISCORD_CHANNEL_ID}"
 webhook_url = "${DISCORD_WEBHOOK_URL}"
 timeout_secs = 15
