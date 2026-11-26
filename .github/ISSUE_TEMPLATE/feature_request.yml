@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement or new integration for academic-agent
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow or academic monitoring need does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: CLI flags, MCP tools, or connector additions you envision.
+    validations:
+      required: true

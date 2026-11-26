@@ -1,0 +1,26 @@
+name: Bug report
+description: File a bug report for academic-agent
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Description
+      description: A clear description of what failed and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Command, configuration snippet, and sample input used.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and OS
+      placeholder: academic-agent 0.1.0 on Linux x86_64
+    validations:
+      required: true

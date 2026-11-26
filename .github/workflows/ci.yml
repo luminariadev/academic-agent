@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run workspace test suite
+        run: cargo test --workspace
+
+      - name: Validate example configuration and n8n workflow
+        shell: bash
+        run: |
+          cargo run --locked --bin academic-agent -- --config examples/academic-agent.toml validate
+          python3 -c "import json; d = json.load(open('workflows/academic-agent.n8n.json', encoding='utf-8')); assert len(d['nodes']) >= 5"
+
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify clean tracked paths and Markdown formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad_dotfiles=$(git ls-files | grep -E '^\.' | grep -Ev '^(\.github/|\.gitignore$|\.dockerignore$)' || true)
+          if [ -n "$bad_dotfiles" ]; then
+            echo "Unexpected hidden files tracked:"
+            echo "$bad_dotfiles"
+            exit 1
+          fi
+
+          md_files=$(git ls-files '*.md')
+          for f in $md_files; do
+            if grep -qE '^---$' "$f"; then
+              echo "Horizontal divider found in $f"
+              exit 1
+            fi
+          done
+
+          if python3 -c "
+          import pathlib, subprocess, sys
+          files = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
+          bad = []
+          for p in files:
+              data = pathlib.Path(p).read_bytes()
+              try:
+                  txt = data.decode('utf-8')
+              except UnicodeDecodeError:
+                  continue
+              if '\u2014' in txt or '\u2013' in txt:
+                  bad.append(p)
+          if bad:
+              print('Disallowed dash characters in:', bad)
+              sys.exit(1)
+          "; then
+            echo "Hygiene check passed."
+          else
+            exit 1
+          fi
