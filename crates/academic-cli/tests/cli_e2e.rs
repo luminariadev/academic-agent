@@ -217,4 +217,69 @@ fn test_cli_full_offline_lifecycle() {
     let digest_json: Value = serde_json::from_slice(&digest.stdout).unwrap();
     assert_eq!(digest_json["dry_run"], true);
     assert_eq!(digest_json["open_task_count"], 1);
+
+    // 7. calendar-feed & doctor
+    let feed = academic_bin()
+        .current_dir(dir.path())
+        .args([
+            "--config",
+            cfg_path.to_str().unwrap(),
+            "--db",
+            db_path.to_str().unwrap(),
+            "calendar-feed",
+        ])
+        .output()
+        .unwrap();
+    assert!(feed.status.success());
+    let feed_str = String::from_utf8_lossy(&feed.stdout);
+    assert!(feed_str.contains("BEGIN:VCALENDAR"));
+    assert!(feed_str.contains("Kuis 2 BGP dan SDN"));
+
+    let doctor = academic_bin()
+        .current_dir(dir.path())
+        .args([
+            "--config",
+            cfg_path.to_str().unwrap(),
+            "--db",
+            db_path.to_str().unwrap(),
+            "--json",
+            "doctor",
+        ])
+        .output()
+        .unwrap();
+    assert!(doctor.status.success());
+    let doctor_json: Value = serde_json::from_slice(&doctor.stdout).unwrap();
+    assert_eq!(doctor_json["ok"], true);
+    assert_eq!(doctor_json["checks"].as_array().unwrap().len(), 8);
+
+    // 8. non-interactive setup wizard
+    let setup_cfg = dir.path().join("wizard").join("academic-agent.toml");
+    let setup = academic_bin()
+        .current_dir(dir.path())
+        .args([
+            "--config",
+            setup_cfg.to_str().unwrap(),
+            "--json",
+            "setup",
+            "--non-interactive",
+            "--role",
+            "lecturer",
+            "--timezone",
+            "Asia/Jakarta",
+            "--lms-kind",
+            "ics_feed",
+            "--lms-url",
+            "https://lms.campus.ac.id/calendar/export.ics",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        setup.status.success(),
+        "setup stderr: {}",
+        String::from_utf8_lossy(&setup.stderr)
+    );
+    let setup_json: Value = serde_json::from_slice(&setup.stdout).unwrap();
+    assert_eq!(setup_json["lms_enabled"], true);
+    assert!(setup_cfg.exists());
+    assert!(dir.path().join("wizard").join(".env.example").exists());
 }

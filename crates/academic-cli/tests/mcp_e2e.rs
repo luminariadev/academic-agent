@@ -61,7 +61,7 @@ fn test_mcp_stdio_end_to_end() {
         &mut reader,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
     );
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 8);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 10);
 
     let added = send_recv(
         &mut stdin,

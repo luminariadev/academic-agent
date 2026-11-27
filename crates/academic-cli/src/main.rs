@@ -1,16 +1,20 @@
 mod server;
 mod watcher;
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use academic_core::config::{load_dotenv_if_present, Config};
+use academic_core::config::{load_dotenv_if_present, redact_url_secrets, Config, LmsSourceKind};
 use academic_core::cron_engine::run_cron_tick;
 use academic_core::discord_bot::{register_slash_commands, run_discord_gateway};
+use academic_core::doctor::{run_doctor, CheckStatus};
 use academic_core::extract::extract_from_text;
+use academic_core::lms_sync::{sync_all_lms_sources, sync_lms_source};
 use academic_core::notify::{build_task_embed, send_discord_embed, send_via_hermes};
 use academic_core::store::{ExportFormat, TaskStatus, TaskStore};
 use academic_core::{
-    create_ics_event, filter_tasks_for_feed, generate_ics_feed, AcademicPipeline, CalendarEventSpec,
+    create_ics_event, filter_tasks_for_feed, generate_ics_feed, AcademicPipeline,
+    CalendarEventSpec, LmsSourceConfig,
 };
 use academic_mcp::McpServer;
 use chrono::{Duration, Utc};
@@ -116,6 +120,30 @@ enum Commands {
         #[command(subcommand)]
         action: DiscordCommands,
     },
+    /// Inspect system health (config, redb store, timezone, LLM/heuristic, Discord, LMS, feeds)
+    Doctor,
+    /// Interactive or flagged setup wizard generating academic-agent.toml and .env.example
+    Setup {
+        #[arg(long)]
+        non_interactive: bool,
+        #[arg(long, default_value = "student")]
+        role: String,
+        #[arg(long, default_value = "Asia/Jakarta")]
+        timezone: String,
+        #[arg(long, default_value = "ics_feed")]
+        lms_kind: String,
+        #[arg(long)]
+        lms_url: Option<String>,
+        #[arg(long)]
+        discord_webhook: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Manage and synchronize native campus LMS sources (.ics feeds, Moodle REST, Canvas REST)
+    Lms {
+        #[command(subcommand)]
+        action: LmsCommands,
+    },
     /// Start the web dashboard, REST API, webdelta webhook receiver, and /mcp server
     Serve {
         #[arg(long)]
@@ -128,6 +156,10 @@ enum Commands {
         with_watch: bool,
         #[arg(long)]
         with_discord_bot: bool,
+        #[arg(long)]
+        with_lms_sync: bool,
+        #[arg(long)]
+        init_if_missing: bool,
     },
     /// Start the Model Context Protocol server (stdio by default, or Streamable HTTP with --http)
     Mcp {
@@ -156,6 +188,46 @@ enum DiscordCommands {
     },
     /// Start the interactive Discord Gateway WebSocket listener
     Bot,
+}
+
+#[derive(Subcommand)]
+enum LmsCommands {
+    /// List configured campus LMS sources and cached sync counts (secrets redacted)
+    List,
+    /// Pull deadlines from configured [lms.sources] or an ad-hoc .ics/Moodle/Canvas URL
+    Sync {
+        #[arg(long)]
+        source: Option<String>,
+        #[arg(long)]
+        url: Option<String>,
+        #[arg(long, default_value = "ics_feed")]
+        kind: String,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        course: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        notify: bool,
+    },
+}
+
+fn prompt_with_default(label: &str, default: &str) -> String {
+    if default.is_empty() {
+        print!("{label}: ");
+    } else {
+        print!("{label} [{default}]: ");
+    }
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    if std::io::stdin().read_line(&mut line).is_ok() {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    default.to_string()
 }
 
 fn init_logging(verbose: bool) {
@@ -467,6 +539,7 @@ async fn run(cli: Cli) -> academic_core::Result<()> {
                 summary: "Synthetic test notification verifying Discord or Hermes configuration."
                     .to_string(),
                 subtasks: vec!["Verify embed formatting".to_string()],
+                subtasks_done: Vec::new(),
                 deliverables: vec!["None".to_string()],
                 ics_file: None,
                 google_calendar_url: None,
@@ -529,13 +602,273 @@ async fn run(cli: Cli) -> academic_core::Result<()> {
                 }
             }
         }
+        Commands::Doctor => {
+            let _ = load_dotenv_if_present(Path::new(".env"));
+            let mut cfg = if cli.config.exists() {
+                Config::load(&cli.config)?
+            } else {
+                let mut d = Config::default();
+                d.resolve_env_from_process();
+                d.validate()?;
+                d
+            };
+            if let Some(db) = cli.db.as_deref() {
+                cfg.general.db_path = db.to_path_buf();
+            }
+            cfg.ensure_runtime_dirs()?;
+            let store = TaskStore::open(&cfg.general.db_path)?;
+            let report = run_doctor(&cli.config, &cfg, &store);
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                println!(
+                    "academic-agent doctor (v{}, timezone={})",
+                    report.version, report.timezone
+                );
+                for check in &report.checks {
+                    let badge = match check.status {
+                        CheckStatus::Pass => "PASS",
+                        CheckStatus::Warn => "WARN",
+                        CheckStatus::Fail => "FAIL",
+                    };
+                    println!("[{badge}] {:<14} {}", check.name, check.summary);
+                    if check.status != CheckStatus::Pass {
+                        println!("       hint: {}", check.hint);
+                    }
+                }
+            }
+            Ok(())
+        }
+        Commands::Setup {
+            non_interactive,
+            role,
+            timezone,
+            lms_kind,
+            lms_url,
+            discord_webhook,
+            force,
+        } => {
+            if cli.config.exists() && !force {
+                return Err(academic_core::Error::Config(format!(
+                    "'{}' already exists; pass --force to overwrite",
+                    cli.config.display()
+                )));
+            }
+
+            let (final_role, final_tz, final_kind, final_url, final_webhook) = if non_interactive {
+                (
+                    role,
+                    timezone,
+                    lms_kind,
+                    lms_url.unwrap_or_default(),
+                    discord_webhook.unwrap_or_default(),
+                )
+            } else {
+                println!("academic-agent setup wizard (press Enter to accept defaults)");
+                let r = prompt_with_default("Role (student/lecturer)", &role);
+                let tz = prompt_with_default("Timezone (IANA, e.g. Asia/Jakarta)", &timezone);
+                let lk = prompt_with_default(
+                    "Campus LMS type (ics_feed/moodle_api/canvas_api/skip)",
+                    &lms_kind,
+                );
+                let lu = if lk.eq_ignore_ascii_case("skip") {
+                    String::new()
+                } else {
+                    prompt_with_default(
+                        "LMS URL (leave blank to configure later in Connect LMS UI)",
+                        lms_url.as_deref().unwrap_or(""),
+                    )
+                };
+                let dw = prompt_with_default(
+                    "Discord Webhook URL (optional, leave blank if using Bot env vars)",
+                    discord_webhook.as_deref().unwrap_or(""),
+                );
+                (r, tz, lk, lu, dw)
+            };
+
+            let mut toml_out = Config::starter_toml().replace(
+                "timezone = \"Asia/Jakarta\"",
+                &format!("timezone = \"{}\"", final_tz.trim()),
+            );
+            let role_note = if final_role.eq_ignore_ascii_case("lecturer") {
+                "# Role profile: lecturer (share /api/calendar/feed.ics?course=... with classes)\n"
+            } else {
+                "# Role profile: student\n"
+            };
+            toml_out = format!("{role_note}{toml_out}");
+
+            if !final_webhook.trim().is_empty() {
+                toml_out = toml_out.replace(
+                    "webhook_url = \"${DISCORD_WEBHOOK_URL}\"",
+                    &format!("webhook_url = \"{}\"", final_webhook.trim()),
+                );
+            }
+
+            if !final_url.trim().is_empty() && !final_kind.eq_ignore_ascii_case("skip") {
+                let parsed_kind = LmsSourceKind::parse_loose(&final_kind)?;
+                toml_out = toml_out.replace("[lms]\nenabled = false", "[lms]\nenabled = true");
+                toml_out.push_str(&format!(
+                    "\n[[lms.sources]]\nname = \"campus-lms\"\nkind = \"{}\"\nurl = \"{}\"\ndefault_course = \"Campus LMS\"\nenabled = true\n",
+                    parsed_kind.as_str(),
+                    final_url.trim()
+                ));
+            }
+
+            let parsed_cfg = Config::from_toml_str(&toml_out)?;
+            parsed_cfg.validate()?;
+
+            if let Some(parent) = cli.config.parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent)?;
+                }
+            }
+            std::fs::write(&cli.config, &toml_out)?;
+
+            let env_example_path = cli
+                .config
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(|p| p.join(".env.example"))
+                .unwrap_or_else(|| PathBuf::from(".env.example"));
+            if !env_example_path.exists() {
+                let sample_env = concat!(
+                    "# Copy to .env and fill in any secrets you use\n",
+                    "ACADEMIC_API_TOKEN=\n",
+                    "DISCORD_BOT_TOKEN=\n",
+                    "DISCORD_CLIENT_ID=\n",
+                    "DISCORD_GUILD_ID=\n",
+                    "DISCORD_CHANNEL_ID=\n",
+                    "DISCORD_WEBHOOK_URL=\n",
+                    "ACADEMIC_LLM_API_BASE=\n",
+                    "ACADEMIC_LLM_API_KEY=\n",
+                );
+                std::fs::write(&env_example_path, sample_env)?;
+            }
+
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "configured": cli.config.display().to_string(),
+                        "role": final_role,
+                        "timezone": final_tz,
+                        "lms_enabled": !final_url.trim().is_empty(),
+                    }))?
+                );
+            } else {
+                println!("Wrote configuration to {}", cli.config.display());
+                println!(
+                    "Next: run `academic-agent doctor` or `academic-agent serve --with-cron --with-lms-sync` and open http://127.0.0.1:8080"
+                );
+            }
+            Ok(())
+        }
+        Commands::Lms { action } => {
+            let cfg = load_config(&cli.config, cli.db.as_deref())?;
+            let store = TaskStore::open(&cfg.general.db_path)?;
+            match action {
+                LmsCommands::List => {
+                    let mut rows = Vec::with_capacity(cfg.lms.sources.len());
+                    for src in &cfg.lms.sources {
+                        let key =
+                            format!("src:{}", academic_core::calendar::safe_slug(&src.name, 32));
+                        let meta = store.get_lms_sync_meta(&key)?;
+                        rows.push(json!({
+                            "name": src.name,
+                            "kind": src.kind.as_str(),
+                            "url": redact_url_secrets(&src.url),
+                            "default_course": src.default_course,
+                            "enabled": src.enabled,
+                            "meta": meta,
+                        }));
+                    }
+                    if cli.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&json!({ "sources": rows }))?
+                        );
+                    } else if rows.is_empty() {
+                        println!("No [lms.sources] configured in {}", cli.config.display());
+                    } else {
+                        for r in &rows {
+                            println!(
+                                "{} [{}] enabled={} url={}",
+                                r["name"].as_str().unwrap_or(""),
+                                r["kind"].as_str().unwrap_or(""),
+                                r["enabled"],
+                                r["url"].as_str().unwrap_or("")
+                            );
+                        }
+                    }
+                    Ok(())
+                }
+                LmsCommands::Sync {
+                    source,
+                    url,
+                    kind,
+                    token,
+                    course,
+                    name,
+                    notify,
+                } => {
+                    let notify_opt = if notify { Some(true) } else { None };
+                    let reports = if let Some(raw_url) = url {
+                        let parsed_kind = LmsSourceKind::parse_loose(&kind)?;
+                        let src = LmsSourceConfig {
+                            name: name.unwrap_or_else(|| "campus-lms".to_string()),
+                            kind: parsed_kind,
+                            url: raw_url,
+                            token: token.unwrap_or_default(),
+                            default_course: course.unwrap_or_else(|| "Campus LMS".to_string()),
+                            enabled: true,
+                        };
+                        vec![sync_lms_source(&store, &cfg, &src, notify_opt).await?]
+                    } else {
+                        sync_all_lms_sources(&store, &cfg, source.as_deref(), notify_opt).await?
+                    };
+
+                    if cli.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&json!({ "reports": reports }))?
+                        );
+                    } else if reports.is_empty() {
+                        println!("No enabled LMS sources to synchronize.");
+                    } else {
+                        for r in &reports {
+                            println!(
+                                "[{}] kind={} not_modified={} fetched={} inserted={} updated={} unchanged={}",
+                                r.source_name,
+                                r.kind,
+                                r.not_modified,
+                                r.fetched_events,
+                                r.inserted,
+                                r.updated,
+                                r.unchanged
+                            );
+                        }
+                    }
+                    Ok(())
+                }
+            }
+        }
         Commands::Serve {
             bind,
             token,
             with_cron,
             with_watch,
             with_discord_bot,
+            with_lms_sync,
+            init_if_missing,
         } => {
+            if init_if_missing && !cli.config.exists() {
+                if let Some(parent) = cli.config.parent() {
+                    if !parent.as_os_str().is_empty() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                }
+                std::fs::write(&cli.config, Config::starter_toml())?;
+            }
             let cfg = load_config(&cli.config, cli.db.as_deref())?;
             server::run_serve(
                 cli.config,
@@ -545,6 +878,7 @@ async fn run(cli: Cli) -> academic_core::Result<()> {
                 with_cron,
                 with_watch,
                 with_discord_bot,
+                with_lms_sync,
             )
             .await
         }

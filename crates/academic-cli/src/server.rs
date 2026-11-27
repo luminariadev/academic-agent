@@ -4,18 +4,22 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use academic_core::calendar::{
-    create_ics_event, filter_tasks_for_feed, generate_ics_feed, parse_deadline_in_tz,
+    create_ics_event, filter_tasks_for_feed, generate_ics_feed, parse_deadline_in_tz, safe_slug,
     CalendarEventSpec,
 };
-use academic_core::config::Config;
+use academic_core::config::{redact_url_secrets, Config, LmsSourceConfig, LmsSourceKind};
 use academic_core::cron_engine::run_cron_tick;
 use academic_core::discord_bot::run_discord_gateway;
+use academic_core::doctor::run_doctor;
 use academic_core::error::Error;
 use academic_core::extract::{extract_from_text, Priority, TaskKind};
+use academic_core::lms_sync::{sync_all_lms_sources, sync_lms_source};
 use academic_core::notify::dispatch_new_task;
 use academic_core::parser::{safe_join_within, sanitize_filename, sha256_hex};
 use academic_core::pipeline::{verify_hmac_sha256, AcademicPipeline, WebdeltaWebhookPayload};
-use academic_core::store::{ExportFormat, InsertOutcome, NewTask, TaskStatus, TaskStore};
+use academic_core::store::{
+    ExportFormat, InsertOutcome, NewTask, TaskPatch, TaskStatus, TaskStore,
+};
 use academic_mcp::{
     constant_time_secret_eq, is_bearer_authorized, mcp_route, McpHttpState, McpServer,
 };
@@ -23,7 +27,7 @@ use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, Path as AxumPath, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{delete, get, patch, post};
+use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use chrono::Utc;
 use serde::Deserialize;
@@ -36,6 +40,7 @@ use crate::watcher::run_watcher_loop;
 
 #[derive(Clone)]
 pub struct AppState {
+    pub config_path: PathBuf,
     pub config: Config,
     pub store: TaskStore,
     pub api_token: Option<String>,
@@ -345,6 +350,184 @@ async fn update_status_handler(
     let status = TaskStatus::parse_loose(&body.status)?;
     let updated = state.store.update_status(id, status)?;
     Ok(Json(json!({ "task": updated })))
+}
+
+#[derive(Deserialize, Default)]
+struct UpdateTaskBody {
+    title: Option<String>,
+    course: Option<String>,
+    kind: Option<String>,
+    deadline: Option<String>,
+    priority: Option<String>,
+    status: Option<String>,
+    estimated_hours: Option<u32>,
+    summary: Option<String>,
+    subtasks: Option<Vec<String>>,
+    subtasks_done: Option<Vec<usize>>,
+    deliverables: Option<Vec<String>>,
+}
+
+async fn update_task_handler(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    AxumPath(id): AxumPath<u64>,
+    Json(body): Json<UpdateTaskBody>,
+) -> std::result::Result<Json<Value>, ApiError> {
+    require_bearer(&state, &headers)?;
+    let tz = state.config.timezone_tz()?;
+    let mut refresh_cal = body.title.is_some() || body.course.is_some();
+
+    let mut patch = TaskPatch {
+        title: body.title,
+        course: body.course,
+        kind: body.kind.as_deref().map(TaskKind::parse_loose),
+        priority: body.priority.as_deref().map(Priority::parse_loose),
+        status: match body.status.as_deref() {
+            Some(s) => Some(TaskStatus::parse_loose(s)?),
+            None => None,
+        },
+        estimated_hours: body.estimated_hours,
+        summary: body.summary,
+        subtasks: body.subtasks,
+        subtasks_done: body.subtasks_done,
+        deliverables: body.deliverables,
+        ..Default::default()
+    };
+
+    if let Some(raw_dl) = body.deadline {
+        refresh_cal = true;
+        let trimmed = raw_dl.trim().to_string();
+        if trimmed.is_empty() {
+            patch.deadline_raw = Some(None);
+            patch.deadline_utc = Some(None);
+        } else {
+            let parsed = parse_deadline_in_tz(&trimmed, tz).ok_or_else(|| {
+                ApiError::BadRequest(format!("could not parse deadline '{trimmed}'"))
+            })?;
+            patch.deadline_raw = Some(Some(trimmed));
+            patch.deadline_utc = Some(Some(parsed.with_timezone(&Utc)));
+        }
+    }
+
+    let mut updated = state.store.update_task(id, patch)?;
+    if refresh_cal && (updated.deadline_raw.is_some() || updated.deadline_utc.is_some()) {
+        let cal = create_ics_event(CalendarEventSpec {
+            calendar_dir: &state.config.general.calendar_dir,
+            title: &updated.title,
+            deadline_str: updated.deadline_raw.as_deref(),
+            tz,
+            course: &updated.course,
+            description: &updated.summary,
+            duration_hours: state.config.general.default_duration_hours,
+            priority: updated.priority,
+        })?;
+        updated = state.store.update_calendar_info(
+            updated.id,
+            Some(cal.filename),
+            Some(cal.google_calendar_url),
+        )?;
+    }
+
+    Ok(Json(json!({ "task": updated })))
+}
+
+async fn doctor_handler(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> std::result::Result<Json<Value>, ApiError> {
+    require_bearer(&state, &headers)?;
+    let report = run_doctor(&state.config_path, &state.config, &state.store);
+    Ok(Json(
+        serde_json::to_value(report).map_err(|e| ApiError::Internal(e.to_string()))?,
+    ))
+}
+
+async fn lms_sources_handler(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> std::result::Result<Json<Value>, ApiError> {
+    require_bearer(&state, &headers)?;
+    let mut sources = Vec::with_capacity(state.config.lms.sources.len());
+    for src in &state.config.lms.sources {
+        let key = format!("src:{}", safe_slug(&src.name, 32));
+        let meta = state.store.get_lms_sync_meta(&key)?;
+        sources.push(json!({
+            "name": src.name,
+            "kind": src.kind.as_str(),
+            "url": redact_url_secrets(&src.url),
+            "default_course": src.default_course,
+            "enabled": src.enabled,
+            "meta": meta,
+        }));
+    }
+    Ok(Json(json!({
+        "enabled": state.config.lms.enabled,
+        "sync_interval_secs": state.config.lms.sync_interval_secs,
+        "sources": sources,
+    })))
+}
+
+#[derive(Deserialize, Default)]
+struct LmsSyncBody {
+    source: Option<String>,
+    url: Option<String>,
+    kind: Option<String>,
+    token: Option<String>,
+    course: Option<String>,
+    name: Option<String>,
+    notify: Option<bool>,
+}
+
+async fn lms_sync_handler(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<LmsSyncBody>,
+) -> std::result::Result<Json<Value>, ApiError> {
+    require_bearer(&state, &headers)?;
+    if let Some(raw_url) = body.url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if !(raw_url.starts_with("http://") || raw_url.starts_with("https://")) {
+            return Err(ApiError::BadRequest(
+                "LMS URL must start with http:// or https://".to_string(),
+            ));
+        }
+        let kind = body
+            .kind
+            .as_deref()
+            .map(LmsSourceKind::parse_loose)
+            .transpose()?
+            .unwrap_or(LmsSourceKind::IcsFeed);
+        let source = LmsSourceConfig {
+            name: body
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("campus-lms")
+                .to_string(),
+            kind,
+            url: raw_url.to_string(),
+            token: body.token.as_deref().unwrap_or("").trim().to_string(),
+            default_course: body
+                .course
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("Campus LMS")
+                .to_string(),
+            enabled: true,
+        };
+        let report = sync_lms_source(&state.store, &state.config, &source, body.notify).await?;
+        return Ok(Json(json!({ "reports": [report] })));
+    }
+
+    let reports = sync_all_lms_sources(
+        &state.store,
+        &state.config,
+        body.source.as_deref(),
+        body.notify,
+    )
+    .await?;
+    Ok(Json(json!({ "reports": reports })))
 }
 
 #[derive(Deserialize)]
@@ -668,6 +851,7 @@ pub fn build_app_router(
     });
 
     let app_state = Arc::new(AppState {
+        config_path,
         config,
         store,
         api_token,
@@ -677,6 +861,9 @@ pub fn build_app_router(
     Router::new()
         .route("/", get(dashboard_handler))
         .route("/health", get(health_handler))
+        .route("/api/doctor", get(doctor_handler))
+        .route("/api/lms/sources", get(lms_sources_handler))
+        .route("/api/lms/sync", post(lms_sync_handler))
         .route(
             "/api/tasks",
             get(list_tasks_handler)
@@ -686,7 +873,10 @@ pub fn build_app_router(
         .route("/api/tasks/export", get(export_tasks_handler))
         .route("/api/tasks/{id}/status", patch(update_status_handler))
         .route("/api/tasks/{id}/snooze", post(snooze_handler))
-        .route("/api/tasks/{id}", delete(delete_task_handler))
+        .route(
+            "/api/tasks/{id}",
+            patch(update_task_handler).delete(delete_task_handler),
+        )
         .route("/api/upcoming", get(upcoming_handler))
         .route("/api/extract", post(extract_handler))
         .route("/api/upload", post(upload_handler))
@@ -701,7 +891,8 @@ pub fn build_app_router(
 }
 
 /// Runs the embedded HTTP server with optional background cron scheduler, folder watcher,
-/// and interactive Discord Gateway bot.
+/// interactive Discord Gateway bot, and periodic LMS synchronization loop.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_serve(
     config_path: PathBuf,
     config: Config,
@@ -710,6 +901,7 @@ pub async fn run_serve(
     with_cron: bool,
     with_watch: bool,
     with_discord_bot: bool,
+    with_lms_sync: bool,
 ) -> academic_core::Result<()> {
     config.ensure_runtime_dirs()?;
     let store = TaskStore::open(&config.general.db_path)?;
@@ -768,6 +960,32 @@ pub async fn run_serve(
         }));
     }
 
+    let mut lms_handle = None;
+    if with_lms_sync {
+        let l_cfg = config.clone();
+        let l_store = store.clone();
+        let mut l_rx = shutdown_rx.clone();
+        let sync_secs = l_cfg.lms.sync_interval_secs.max(30);
+        lms_handle = Some(tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_secs(sync_secs));
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = l_rx.changed() => {
+                        if *l_rx.borrow() {
+                            break;
+                        }
+                    }
+                    _ = ticker.tick() => {
+                        if let Err(e) = sync_all_lms_sources(&l_store, &l_cfg, None, None).await {
+                            error!("LMS background sync failed: {e}");
+                        }
+                    }
+                }
+            }
+        }));
+    }
+
     let listener = TcpListener::bind(&bind).await?;
     let local_addr: SocketAddr = listener.local_addr()?;
     info!("academic-agent server listening on http://{local_addr}");
@@ -788,6 +1006,9 @@ pub async fn run_serve(
         let _ = h.await;
     }
     if let Some(h) = bot_handle {
+        let _ = h.await;
+    }
+    if let Some(h) = lms_handle {
         let _ = h.await;
     }
     Ok(())

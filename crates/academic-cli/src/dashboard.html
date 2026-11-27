@@ -42,17 +42,17 @@
     header {
       border-bottom: 1px solid var(--border);
       background: var(--panel);
-      padding: 14px 24px;
+      padding: 13px 22px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
     }
-    .brand { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+    .brand { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
     .brand span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
-    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    input[type="text"], input[type="search"], input[type="password"], select, textarea {
+    .controls { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+    input[type="text"], input[type="url"], input[type="search"], input[type="password"], select, textarea {
       background: var(--bg);
       border: 1px solid var(--border);
       color: var(--text);
@@ -60,12 +60,12 @@
       border-radius: 6px;
       font-size: 13px;
     }
-    input[type="search"] { min-width: 190px; }
+    input[type="search"] { min-width: 170px; }
     button, .btn-link {
       background: var(--panel);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 6px 11px;
+      padding: 6px 10px;
       border-radius: 6px;
       font-size: 12px;
       text-decoration: none;
@@ -73,6 +73,7 @@
       align-items: center;
       gap: 4px;
       cursor: pointer;
+      white-space: nowrap;
     }
     button:hover, .btn-link:hover { border-color: var(--accent); }
     button.primary, .btn-link.primary {
@@ -82,15 +83,16 @@
       font-weight: 600;
     }
     button.primary:hover, .btn-link.primary:hover { background: var(--accent-hover); }
+    button.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
     button.danger { color: var(--red); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
-    main { max-width: 1240px; margin: 22px auto; padding: 0 20px; }
+    main { max-width: 1240px; margin: 14px auto; padding: 0 20px; }
     .banner {
       background: var(--panel);
       border: 1px solid var(--amber);
       border-radius: 8px;
       padding: 10px 14px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       display: none;
       align-items: center;
       justify-content: space-between;
@@ -100,14 +102,14 @@
     .stats {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
+      gap: 10px;
+      margin-bottom: 12px;
     }
     .stat-card {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 14px 16px;
+      padding: 11px 14px;
     }
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
     .stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
@@ -116,11 +118,11 @@
     .stat-value.ok { color: var(--green); }
     .toolbar {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
     .table-wrap {
       background: var(--panel);
@@ -146,10 +148,9 @@
       border: 1px solid var(--border);
       white-space: nowrap;
     }
-    .badge.high { color: var(--red); border-color: var(--red); }
-    .badge.medium { color: var(--amber); border-color: var(--amber); }
-    .badge.low { color: var(--green); border-color: var(--green); }
-    .badge.done { color: var(--green); border-color: var(--green); }
+    .badge.high, .badge.fail { color: var(--red); border-color: var(--red); }
+    .badge.medium, .badge.warn { color: var(--amber); border-color: var(--amber); }
+    .badge.low, .badge.done, .badge.pass { color: var(--green); border-color: var(--green); }
     .badge.pending { color: var(--accent); border-color: var(--accent); }
     .badge.muted-b { color: var(--muted); border-color: var(--border); }
     .muted { color: var(--muted); font-size: 12px; }
@@ -157,12 +158,82 @@
     .urgency-overdue { color: var(--red); font-weight: 600; font-size: 12px; }
     .urgency-soon { color: var(--amber); font-weight: 600; font-size: 12px; }
     .actions { display: flex; gap: 5px; flex-wrap: nowrap; }
+    .empty-guide {
+      background: var(--panel);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 28px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .empty-guide h3 { margin: 0 0 8px; font-size: 16px; }
+    .empty-guide p { margin: 0 auto 16px; max-width: 600px; color: var(--muted); font-size: 13px; }
+    .cal-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .cal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .cal-dow {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      padding: 4px 0;
+    }
+    .cal-cell {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      min-height: 64px;
+      padding: 4px 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+    .cal-cell.other-month { opacity: 0.45; }
+    .cal-cell.today { border-color: var(--accent); }
+    .cal-day { font-size: 11px; font-weight: 600; color: var(--muted); }
+    .cal-chip {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 11px;
+      line-height: 1.25;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      cursor: pointer;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+    }
+    .cal-chip.overdue { border-color: var(--red); color: var(--red); }
+    .cal-chip.soon { border-color: var(--amber); color: var(--amber); }
+    .cal-chip.done { border-color: var(--green); color: var(--green); text-decoration: line-through; }
+    .cal-chip.open { border-color: var(--accent); }
     dialog {
       background: var(--panel);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 10px;
-      max-width: 720px;
+      max-width: 740px;
       width: 92%;
       padding: 0;
     }
@@ -174,7 +245,7 @@
       justify-content: space-between;
       align-items: center;
     }
-    .modal-body { padding: 18px; max-height: 75vh; overflow-y: auto; }
+    .modal-body { padding: 18px; max-height: 76vh; overflow-y: auto; }
     .form-grid { display: grid; gap: 12px; }
     .form-row { display: grid; gap: 6px; }
     .form-row label { font-size: 12px; color: var(--muted); font-weight: 600; }
@@ -190,50 +261,78 @@
       border-radius: 6px;
       padding: 10px 12px;
     }
-    .checklist { margin: 6px 0 14px 18px; padding: 0; }
-    .checklist li { margin-bottom: 4px; }
+    .checklist { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 6px; }
+    .checklist label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+    .checklist span.checked { text-decoration: line-through; color: var(--muted); }
     .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      background: var(--code-bg);
+      cursor: pointer;
+    }
+    .dropzone.drag { border-color: var(--accent); }
+    .hint-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+    .doctor-list { display: grid; gap: 8px; }
+    .doctor-item {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="brand">academic-agent <span>Task & Deadline Dashboard</span></div>
+    <div class="brand">academic-agent <span data-i18n="subtitle">Task & Deadline Dashboard</span></div>
     <div class="controls">
-      <button id="open-upload-btn" class="primary">Upload Document</button>
-      <button id="open-add-btn">Add Task</button>
-      <button id="cron-btn">Cron Tick</button>
-      <button id="feed-btn">Calendar Feed</button>
-      <button id="export-json-btn">Export JSON</button>
-      <button id="export-csv-btn">Export CSV</button>
-      <button id="refresh-btn">Refresh</button>
-      <button id="theme-btn">Theme</button>
+      <button id="open-upload-btn" class="primary" data-i18n="btn_upload">Upload</button>
+      <button id="open-add-btn" data-i18n="btn_add">Add Task</button>
+      <button id="open-lms-btn" data-i18n="btn_lms">Connect LMS</button>
+      <button id="open-doctor-btn" data-i18n="btn_health">Health</button>
+      <button id="feed-btn" data-i18n="btn_feed">Calendar Feed</button>
+      <button id="lang-btn">ID</button>
+      <button id="theme-btn" data-i18n="btn_theme">Theme</button>
     </div>
   </header>
 
   <main>
     <div id="auth-banner" class="banner">
-      <span>API authentication required. Enter bearer token:</span>
+      <span data-i18n="auth_prompt">API authentication required. Enter bearer token:</span>
       <div class="controls">
         <input id="token-input" type="password" placeholder="Bearer token">
-        <button id="token-save" class="primary">Save Token</button>
+        <button id="token-save" class="primary" data-i18n="btn_save_token">Save Token</button>
       </div>
     </div>
 
     <div id="msg-banner" class="banner">
       <span id="msg-text"></span>
-      <button onclick="document.getElementById('msg-banner').classList.remove('show')">Dismiss</button>
+      <button onclick="document.getElementById('msg-banner').classList.remove('show')" data-i18n="btn_dismiss">Dismiss</button>
     </div>
 
     <section class="stats">
-      <div class="stat-card"><div class="stat-label">Open Tasks</div><div id="stat-open" class="stat-value">0</div></div>
-      <div class="stat-card"><div class="stat-label">Due Within 72h</div><div id="stat-soon" class="stat-value warn">0</div></div>
-      <div class="stat-card"><div class="stat-label">Overdue</div><div id="stat-overdue" class="stat-value danger">0</div></div>
-      <div class="stat-card"><div class="stat-label">Completed</div><div id="stat-done" class="stat-value ok">0</div></div>
+      <div class="stat-card"><div class="stat-label" data-i18n="stat_open">Open Tasks</div><div id="stat-open" class="stat-value">0</div></div>
+      <div class="stat-card"><div class="stat-label" data-i18n="stat_soon">Due Within 72h</div><div id="stat-soon" class="stat-value warn">0</div></div>
+      <div class="stat-card"><div class="stat-label" data-i18n="stat_overdue">Overdue</div><div id="stat-overdue" class="stat-value danger">0</div></div>
+      <div class="stat-card"><div class="stat-label" data-i18n="stat_done">Completed</div><div id="stat-done" class="stat-value ok">0</div></div>
     </section>
 
     <div class="toolbar">
       <div class="controls">
         <input id="search" type="search" placeholder="Filter by title or course...">
+        <select id="course-filter">
+          <option value="">All Courses</option>
+        </select>
         <select id="status-filter">
           <option value="">All Statuses</option>
           <option value="PENDING">PENDING</option>
@@ -247,51 +346,83 @@
           <option value="MEDIUM">MEDIUM</option>
           <option value="LOW">LOW</option>
         </select>
+        <button id="view-list-btn" class="active" data-i18n="view_list">List</button>
+        <button id="view-cal-btn" data-i18n="view_cal">Calendar</button>
       </div>
-      <div id="count-label" class="muted">0 tasks shown</div>
+      <div class="controls">
+        <button id="share-course-btn" data-i18n="btn_share_course">Share Course Feed</button>
+        <button id="cron-btn">Cron Tick</button>
+        <button id="export-json-btn">JSON</button>
+        <button id="export-csv-btn">CSV</button>
+        <button id="refresh-btn" data-i18n="btn_refresh">Refresh</button>
+        <span id="count-label" class="muted">0 tasks</span>
+      </div>
     </div>
 
-    <section class="table-wrap">
+    <div id="empty-guide" class="empty-guide" style="display:none;">
+      <h3 data-i18n="empty_title">Ready for your semester tasks</h3>
+      <p data-i18n="empty_desc">Connect your campus LMS calendar URL (Moodle, Canvas, Google Classroom), upload a syllabus or assignment PDF/DOCX, or create a task manually.</p>
+      <div class="controls" style="justify-content:center;">
+        <button class="primary" onclick="document.getElementById('open-lms-btn').click()" data-i18n="btn_lms">Connect LMS</button>
+        <button onclick="document.getElementById('open-upload-btn').click()" data-i18n="btn_upload">Upload</button>
+        <button onclick="document.getElementById('open-add-btn').click()" data-i18n="btn_add">Add Task</button>
+      </div>
+    </div>
+
+    <section id="list-view" class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Task</th>
-            <th>Deadline & Countdown</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th data-i18n="th_task">Task</th>
+            <th data-i18n="th_deadline">Deadline & Countdown</th>
+            <th data-i18n="th_priority">Priority</th>
+            <th data-i18n="th_status">Status</th>
+            <th data-i18n="th_actions">Actions</th>
           </tr>
         </thead>
         <tbody id="tasks-body"></tbody>
       </table>
+    </section>
+
+    <section id="calendar-view" class="cal-wrap" style="display:none;">
+      <div class="cal-head">
+        <div class="controls">
+          <button id="cal-prev">&lt;</button>
+          <strong id="cal-month-label">Month</strong>
+          <button id="cal-next">&gt;</button>
+          <button id="cal-today" data-i18n="btn_today">Today</button>
+        </div>
+        <span class="muted" data-i18n="cal_hint">Click any event chip to inspect or edit</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
     </section>
   </main>
 
   <dialog id="detail-modal">
     <div class="modal-head">
       <strong id="detail-title">Task Details</strong>
-      <button onclick="document.getElementById('detail-modal').close()">Close</button>
+      <button onclick="document.getElementById('detail-modal').close()" data-i18n="btn_close">Close</button>
     </div>
     <div id="detail-body" class="modal-body"></div>
   </dialog>
 
   <dialog id="upload-modal">
     <div class="modal-head">
-      <strong>Upload Document (.pdf, .docx, .txt, .md)</strong>
-      <button onclick="document.getElementById('upload-modal').close()">Close</button>
+      <strong data-i18n="upload_title">Upload Document (.pdf, .docx, .txt, .md)</strong>
+      <button onclick="document.getElementById('upload-modal').close()" data-i18n="btn_close">Close</button>
     </div>
     <div class="modal-body">
       <form id="upload-form" class="form-grid">
-        <div class="form-row">
-          <label for="upload-file">Document File</label>
-          <input id="upload-file" type="file" accept=".pdf,.docx,.txt,.md" required>
+        <div id="dropzone" class="dropzone">
+          <div id="dropzone-label" data-i18n="dropzone_hint">Drop a syllabus, assignment brief, or PDF here, or click to browse</div>
+          <input id="upload-file" type="file" accept=".pdf,.docx,.txt,.md" required style="display:none;">
         </div>
         <div class="controls">
-          <label><input id="upload-heuristic" type="checkbox"> Force offline heuristic</label>
-          <label><input id="upload-notify" type="checkbox" checked> Send notifications</label>
+          <label><input id="upload-heuristic" type="checkbox"> <span data-i18n="opt_heuristic">Force offline heuristic</span></label>
+          <label><input id="upload-notify" type="checkbox" checked> <span data-i18n="opt_notify">Send notifications</span></label>
         </div>
         <div class="modal-actions">
-          <button type="submit" class="primary">Upload and Ingest</button>
+          <button type="submit" class="primary" data-i18n="btn_ingest">Upload and Ingest</button>
         </div>
       </form>
     </div>
@@ -299,25 +430,25 @@
 
   <dialog id="add-modal">
     <div class="modal-head">
-      <strong>Add Academic Task</strong>
-      <button onclick="document.getElementById('add-modal').close()">Close</button>
+      <strong data-i18n="add_title">Add Academic Task</strong>
+      <button onclick="document.getElementById('add-modal').close()" data-i18n="btn_close">Close</button>
     </div>
     <div class="modal-body">
       <form id="add-form" class="form-grid">
         <div class="form-row">
-          <label for="add-title">Title</label>
+          <label for="add-title" data-i18n="lbl_title">Title</label>
           <input id="add-title" type="text" placeholder="e.g. Raft Consensus Lab" required>
         </div>
         <div class="form-row">
-          <label for="add-course">Course</label>
+          <label for="add-course" data-i18n="lbl_course">Course</label>
           <input id="add-course" type="text" placeholder="e.g. Distributed Systems">
         </div>
         <div class="form-row">
-          <label for="add-deadline">Deadline (YYYY-MM-DD HH:MM)</label>
+          <label for="add-deadline" data-i18n="lbl_deadline">Deadline (YYYY-MM-DD HH:MM)</label>
           <input id="add-deadline" type="text" placeholder="2026-12-10 23:59">
         </div>
         <div class="form-row">
-          <label for="add-priority">Priority</label>
+          <label for="add-priority" data-i18n="lbl_priority">Priority</label>
           <select id="add-priority">
             <option value="HIGH">HIGH</option>
             <option value="MEDIUM" selected>MEDIUM</option>
@@ -325,18 +456,289 @@
           </select>
         </div>
         <div class="form-row">
-          <label for="add-summary">Summary</label>
+          <label for="add-summary" data-i18n="lbl_summary">Summary</label>
           <textarea id="add-summary" rows="3" placeholder="Short description of deliverables or requirements"></textarea>
         </div>
         <div class="modal-actions">
-          <button type="submit" class="primary">Create Task</button>
+          <button type="submit" class="primary" data-i18n="btn_create_task">Create Task</button>
         </div>
       </form>
     </div>
   </dialog>
 
+  <dialog id="edit-modal">
+    <div class="modal-head">
+      <strong data-i18n="edit_title">Edit Task</strong>
+      <button onclick="document.getElementById('edit-modal').close()" data-i18n="btn_close">Close</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-form" class="form-grid">
+        <input id="edit-id" type="hidden">
+        <div class="form-row">
+          <label for="edit-title-inp" data-i18n="lbl_title">Title</label>
+          <input id="edit-title-inp" type="text" required>
+        </div>
+        <div class="form-row">
+          <label for="edit-course-inp" data-i18n="lbl_course">Course</label>
+          <input id="edit-course-inp" type="text">
+        </div>
+        <div class="form-row">
+          <label for="edit-deadline-inp" data-i18n="lbl_deadline">Deadline (YYYY-MM-DD HH:MM)</label>
+          <input id="edit-deadline-inp" type="text" placeholder="Leave blank to clear deadline">
+        </div>
+        <div class="controls">
+          <div class="form-row" style="flex:1;">
+            <label for="edit-priority-inp" data-i18n="lbl_priority">Priority</label>
+            <select id="edit-priority-inp">
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+            </select>
+          </div>
+          <div class="form-row" style="flex:1;">
+            <label for="edit-status-inp" data-i18n="th_status">Status</label>
+            <select id="edit-status-inp">
+              <option value="PENDING">PENDING</option>
+              <option value="IN_PROGRESS">IN_PROGRESS</option>
+              <option value="COMPLETED">COMPLETED</option>
+              <option value="ARCHIVED">ARCHIVED</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="edit-summary-inp" data-i18n="lbl_summary">Summary</label>
+          <textarea id="edit-summary-inp" rows="3"></textarea>
+        </div>
+        <div class="form-row">
+          <label for="edit-subtasks-inp" data-i18n="lbl_subtasks">Subtasks (one per line)</label>
+          <textarea id="edit-subtasks-inp" rows="4"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="primary" data-i18n="btn_save">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="lms-modal">
+    <div class="modal-head">
+      <strong data-i18n="lms_title">Connect Campus LMS</strong>
+      <button onclick="document.getElementById('lms-modal').close()" data-i18n="btn_close">Close</button>
+    </div>
+    <div class="modal-body">
+      <form id="lms-form" class="form-grid">
+        <div class="form-row">
+          <label for="lms-kind" data-i18n="lms_kind_lbl">Connection Type</label>
+          <select id="lms-kind">
+            <option value="ics_feed">Exported .ics Calendar Feed (Moodle / Canvas / Google Classroom)</option>
+            <option value="moodle_api">Moodle Web Services REST API (wstoken)</option>
+            <option value="canvas_api">Canvas LMS REST API (Bearer Token)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="lms-url" data-i18n="lms_url_lbl">Feed URL or LMS Base URL</label>
+          <input id="lms-url" type="url" placeholder="https://lms.campus.ac.id/calendar/export_execute.php?..." required>
+        </div>
+        <div class="controls">
+          <div class="form-row" style="flex:1;">
+            <label for="lms-name" data-i18n="lms_name_lbl">Source Label</label>
+            <input id="lms-name" type="text" value="campus-lms">
+          </div>
+          <div class="form-row" style="flex:1;">
+            <label for="lms-course" data-i18n="lms_course_lbl">Fallback Course Name</label>
+            <input id="lms-course" type="text" value="Campus LMS">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="lms-token" data-i18n="lms_token_lbl">Token / wstoken (required only for REST APIs)</label>
+          <input id="lms-token" type="password" placeholder="Optional for .ics feeds">
+        </div>
+        <div class="controls">
+          <label><input id="lms-notify" type="checkbox"> <span data-i18n="opt_notify">Send notifications</span></label>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="primary" data-i18n="btn_sync_now">Sync Now</button>
+        </div>
+      </form>
+      <div class="hint-box" data-i18n="lms_hint">Moodle/SPADA: open Calendar -> Export Calendar -> Copy URL. For custom SIAKAD portals without an API or .ics feed, run the optional Playwright connector (`connector.py discover`).</div>
+      <div id="lms-sources-box" style="margin-top:12px;"></div>
+    </div>
+  </dialog>
+
+  <dialog id="doctor-modal">
+    <div class="modal-head">
+      <strong data-i18n="doctor_title">System Health Check (Doctor)</strong>
+      <button onclick="document.getElementById('doctor-modal').close()" data-i18n="btn_close">Close</button>
+    </div>
+    <div id="doctor-body" class="modal-body"></div>
+  </dialog>
+
   <script>
+    const I18N = {
+      en: {
+        subtitle: "Task & Deadline Dashboard",
+        btn_upload: "Upload",
+        btn_add: "Add Task",
+        btn_lms: "Connect LMS",
+        btn_health: "Health",
+        btn_feed: "Calendar Feed",
+        btn_theme: "Theme",
+        auth_prompt: "API authentication required. Enter bearer token:",
+        btn_save_token: "Save Token",
+        btn_dismiss: "Dismiss",
+        stat_open: "Open Tasks",
+        stat_soon: "Due Within 72h",
+        stat_overdue: "Overdue",
+        stat_done: "Completed",
+        search_ph: "Filter by title or course...",
+        all_courses: "All Courses",
+        all_statuses: "All Statuses",
+        all_priorities: "All Priorities",
+        view_list: "List",
+        view_cal: "Calendar",
+        btn_share_course: "Share Course Feed",
+        btn_refresh: "Refresh",
+        empty_title: "Ready for your semester tasks",
+        empty_desc: "Connect your campus LMS calendar URL (Moodle, Canvas, Google Classroom), upload a syllabus or assignment PDF/DOCX, or create a task manually.",
+        th_task: "Task",
+        th_deadline: "Deadline & Countdown",
+        th_priority: "Priority",
+        th_status: "Status",
+        th_actions: "Actions",
+        btn_today: "Today",
+        cal_hint: "Click any event chip to inspect or edit",
+        btn_close: "Close",
+        upload_title: "Upload Document (.pdf, .docx, .txt, .md)",
+        dropzone_hint: "Drop a syllabus, assignment brief, or PDF here, or click to browse",
+        opt_heuristic: "Force offline heuristic",
+        opt_notify: "Send notifications",
+        btn_ingest: "Upload and Ingest",
+        add_title: "Add Academic Task",
+        edit_title: "Edit Task",
+        lbl_title: "Title",
+        lbl_course: "Course",
+        lbl_deadline: "Deadline (YYYY-MM-DD HH:MM)",
+        lbl_priority: "Priority",
+        lbl_summary: "Summary",
+        lbl_subtasks: "Subtasks (one per line)",
+        btn_create_task: "Create Task",
+        btn_save: "Save Changes",
+        lms_title: "Connect Campus LMS",
+        lms_kind_lbl: "Connection Type",
+        lms_url_lbl: "Feed URL or LMS Base URL",
+        lms_name_lbl: "Source Label",
+        lms_course_lbl: "Fallback Course Name",
+        lms_token_lbl: "Token / wstoken (required only for REST APIs)",
+        btn_sync_now: "Sync Now",
+        lms_hint: "Moodle/SPADA: open Calendar -> Export Calendar -> Copy URL. For custom SIAKAD portals without an API or .ics feed, run `python connectors/lms-playwright/connector.py discover`.",
+        doctor_title: "System Health Check (Doctor)",
+        btn_details: "Details",
+        btn_done: "Done",
+        btn_snooze: "Snooze",
+        btn_delete: "Delete",
+        btn_edit: "Edit Task",
+        btn_gcal: "Add to Google Calendar",
+        btn_dl_ics: "Download .ics",
+        btn_snooze24: "Snooze 24h",
+        lbl_effort: "Effort & Source",
+        lbl_deliverables: "Deliverables",
+        lbl_checklist: "Subtask Checklist",
+        dows: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      },
+      id: {
+        subtitle: "Dasbor Tugas & Tenggat",
+        btn_upload: "Unggah",
+        btn_add: "Tambah Tugas",
+        btn_lms: "Hubungkan LMS",
+        btn_health: "Cek Sistem",
+        btn_feed: "Feed Kalender",
+        btn_theme: "Tema",
+        auth_prompt: "Autentikasi API diperlukan. Masukkan bearer token:",
+        btn_save_token: "Simpan Token",
+        btn_dismiss: "Tutup",
+        stat_open: "Tugas Aktif",
+        stat_soon: "Tenggat < 72 Jam",
+        stat_overdue: "Terlambat",
+        stat_done: "Selesai",
+        search_ph: "Cari judul atau mata kuliah...",
+        all_courses: "Semua Mata Kuliah",
+        all_statuses: "Semua Status",
+        all_priorities: "Semua Prioritas",
+        view_list: "Daftar",
+        view_cal: "Kalender",
+        btn_share_course: "Bagikan Feed MK",
+        btn_refresh: "Muat Ulang",
+        empty_title: "Siap mengelola tugas semester Anda",
+        empty_desc: "Hubungkan tautan kalender LMS kampus (Moodle, Canvas, Google Classroom), unggah silabus/tugas PDF/DOCX, atau catat tugas secara manual.",
+        th_task: "Tugas",
+        th_deadline: "Tenggat & Hitung Mundur",
+        th_priority: "Prioritas",
+        th_status: "Status",
+        th_actions: "Aksi",
+        btn_today: "Hari Ini",
+        cal_hint: "Klik kotak jadwal untuk detail atau ubah tugas",
+        btn_close: "Tutup",
+        upload_title: "Unggah Dokumen (.pdf, .docx, .txt, .md)",
+        dropzone_hint: "Seret file silabus/tugas PDF/DOCX ke sini, atau klik untuk memilih",
+        opt_heuristic: "Gunakan mode heuristik luring",
+        opt_notify: "Kirim notifikasi",
+        btn_ingest: "Unggah & Proses",
+        add_title: "Tambah Tugas Akademik",
+        edit_title: "Ubah Tugas",
+        lbl_title: "Judul",
+        lbl_course: "Mata Kuliah",
+        lbl_deadline: "Tenggat (YYYY-MM-DD HH:MM)",
+        lbl_priority: "Prioritas",
+        lbl_summary: "Ringkasan",
+        lbl_subtasks: "Subtugas (satu per baris)",
+        btn_create_task: "Buat Tugas",
+        btn_save: "Simpan Perubahan",
+        lms_title: "Hubungkan LMS Kampus",
+        lms_kind_lbl: "Jenis Koneksi",
+        lms_url_lbl: "URL Feed atau URL Dasar LMS",
+        lms_name_lbl: "Label Sumber",
+        lms_course_lbl: "Nama Mata Kuliah Bawaan",
+        lms_token_lbl: "Token / wstoken (khusus REST API)",
+        btn_sync_now: "Sinkronkan Sekarang",
+        lms_hint: "Moodle/SPADA: buka Kalender -> Ekspor Kalender -> Salin URL. Untuk portal SIAKAD kustom tanpa API/.ics, jalankan `python connectors/lms-playwright/connector.py discover`.",
+        doctor_title: "Pemeriksaan Kesehatan Sistem (Doctor)",
+        btn_details: "Detail",
+        btn_done: "Selesai",
+        btn_snooze: "Tunda",
+        btn_delete: "Hapus",
+        btn_edit: "Ubah Tugas",
+        btn_gcal: "Tambah ke Google Calendar",
+        btn_dl_ics: "Unduh .ics",
+        btn_snooze24: "Tunda 24 Jam",
+        lbl_effort: "Estimasi & Sumber",
+        lbl_deliverables: "Keluaran",
+        lbl_checklist: "Daftar Periksa Subtugas",
+        dows: ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
+      }
+    };
+
+    let currentLang = localStorage.getItem("academic_lang") || "en";
+    let currentView = "list";
+    let calCursor = new Date();
     let tasksCache = [];
+
+    function t(key) {
+      return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+    }
+
+    function applyI18n() {
+      document.documentElement.lang = currentLang;
+      document.getElementById("lang-btn").textContent = currentLang === "en" ? "ID" : "EN";
+      document.getElementById("search").placeholder = t("search_ph");
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        el.textContent = t(el.dataset.i18n);
+      });
+      const cf = document.getElementById("course-filter");
+      if (cf.options.length > 0) cf.options[0].textContent = t("all_courses");
+      document.getElementById("status-filter").options[0].textContent = t("all_statuses");
+      document.getElementById("priority-filter").options[0].textContent = t("all_priorities");
+      renderCurrentView();
+    }
 
     function getToken() {
       return sessionStorage.getItem("academic_token") || "";
@@ -377,13 +779,40 @@
       const diffHours = diffMs / 3600000;
       if (diffHours <= 0) {
         const hrs = Math.max(1, Math.round(Math.abs(diffHours)));
-        return { text: `Overdue by ${hrs}h`, cls: "urgency-overdue" };
+        return { text: currentLang === "id" ? `Terlambat ${hrs}j` : `Overdue by ${hrs}h`, cls: "urgency-overdue" };
       }
       if (diffHours < 48) {
-        return { text: `Due in ${Math.max(1, Math.round(diffHours))}h`, cls: "urgency-soon" };
+        const hrs = Math.max(1, Math.round(diffHours));
+        return { text: currentLang === "id" ? `${hrs}j lagi` : `Due in ${hrs}h`, cls: "urgency-soon" };
       }
       const days = Math.round(diffHours / 24);
-      return { text: `Due in ${days}d`, cls: "muted" };
+      return { text: currentLang === "id" ? `${days}h lagi` : `Due in ${days}d`, cls: "muted" };
+    }
+
+    function refreshCourseFilter() {
+      const cf = document.getElementById("course-filter");
+      const prev = cf.value;
+      const courses = Array.from(new Set(tasksCache.map(x => x.course).filter(Boolean))).sort();
+      cf.innerHTML = `<option value="">${esc(t("all_courses"))}</option>` +
+        courses.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+      if (courses.includes(prev)) cf.value = prev;
+    }
+
+    function getFilteredTasks() {
+      const q = document.getElementById("search").value.trim().toLowerCase();
+      const cf = document.getElementById("course-filter").value;
+      const sf = document.getElementById("status-filter").value;
+      const pf = document.getElementById("priority-filter").value;
+      return tasksCache.filter(item => {
+        if (cf && item.course !== cf) return false;
+        if (sf && item.status !== sf) return false;
+        if (pf && item.priority !== pf) return false;
+        if (q) {
+          const hay = `${item.id} ${item.title} ${item.course}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
     }
 
     async function loadTasks() {
@@ -391,79 +820,142 @@
         const resp = await apiFetch("/api/tasks");
         const data = await resp.json();
         tasksCache = data.tasks || [];
-        renderTable();
+        refreshCourseFilter();
+        renderCurrentView();
       } catch (err) {
         showNotice(err.message);
       }
     }
 
-    function renderTable() {
-      const q = document.getElementById("search").value.trim().toLowerCase();
-      const sf = document.getElementById("status-filter").value;
-      const pf = document.getElementById("priority-filter").value;
-
+    function renderCurrentView() {
       const now = Date.now();
-      const openTasks = tasksCache.filter(t => t.status === "PENDING" || t.status === "IN_PROGRESS");
-      const soonTasks = openTasks.filter(t => {
-        if (!t.deadline_utc) return false;
-        const hrs = (new Date(t.deadline_utc).getTime() - now) / 3600000;
+      const openTasks = tasksCache.filter(x => x.status === "PENDING" || x.status === "IN_PROGRESS");
+      const soonTasks = openTasks.filter(x => {
+        if (!x.deadline_utc) return false;
+        const hrs = (new Date(x.deadline_utc).getTime() - now) / 3600000;
         return hrs > 0 && hrs <= 72;
       });
-      const overdueTasks = openTasks.filter(t => t.deadline_utc && new Date(t.deadline_utc).getTime() <= now);
-      const completedTasks = tasksCache.filter(t => t.status === "COMPLETED");
+      const overdueTasks = openTasks.filter(x => x.deadline_utc && new Date(x.deadline_utc).getTime() <= now);
+      const completedTasks = tasksCache.filter(x => x.status === "COMPLETED");
 
       document.getElementById("stat-open").textContent = openTasks.length;
       document.getElementById("stat-soon").textContent = soonTasks.length;
       document.getElementById("stat-overdue").textContent = overdueTasks.length;
       document.getElementById("stat-done").textContent = completedTasks.length;
 
-      const filtered = tasksCache.filter(t => {
-        if (sf && t.status !== sf) return false;
-        if (pf && t.priority !== pf) return false;
-        if (q) {
-          const hay = `${t.id} ${t.title} ${t.course}`.toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
-      });
+      const filtered = getFilteredTasks();
+      document.getElementById("count-label").textContent = `${filtered.length} / ${tasksCache.length}`;
 
-      document.getElementById("count-label").textContent = `${filtered.length} of ${tasksCache.length} task(s)`;
+      const emptyGuide = document.getElementById("empty-guide");
+      const listView = document.getElementById("list-view");
+      const calView = document.getElementById("calendar-view");
+      if (tasksCache.length === 0) {
+        emptyGuide.style.display = "block";
+        listView.style.display = "none";
+        calView.style.display = "none";
+        return;
+      }
+      emptyGuide.style.display = "none";
+
+      if (currentView === "calendar") {
+        listView.style.display = "none";
+        calView.style.display = "block";
+        renderCalendar(filtered);
+      } else {
+        calView.style.display = "none";
+        listView.style.display = "block";
+        renderTable(filtered);
+      }
+    }
+
+    function renderTable(filtered) {
       const tbody = document.getElementById("tasks-body");
       if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="muted">No matching tasks recorded.</td></tr>';
         return;
       }
-
-      tbody.innerHTML = filtered.map(t => {
-        const cd = formatCountdown(t);
-        const prioCls = t.priority === "HIGH" ? "high" : (t.priority === "LOW" ? "low" : "medium");
-        const statusCls = t.status === "COMPLETED" ? "done" : (t.status === "ARCHIVED" ? "muted-b" : "pending");
-        const hasIcs = Boolean(t.ics_file);
-        const isDone = t.status === "COMPLETED";
+      tbody.innerHTML = filtered.map(item => {
+        const cd = formatCountdown(item);
+        const prioCls = item.priority === "HIGH" ? "high" : (item.priority === "LOW" ? "low" : "medium");
+        const statusCls = item.status === "COMPLETED" ? "done" : (item.status === "ARCHIVED" ? "muted-b" : "pending");
+        const doneDis = item.status === "COMPLETED" ? "disabled" : "";
+        const subTotal = (item.subtasks || []).length;
+        const subDone = (item.subtasks_done || []).length;
+        const subMeta = subTotal > 0 ? ` | ${subDone}/${subTotal}` : "";
         return `
           <tr>
             <td>
-              <div><strong>#${t.id} ${esc(t.title)}</strong></div>
-              <div class="muted">${esc(t.course)} <span class="mono">(${esc(t.kind)})</span></div>
+              <div><strong>#${item.id} ${esc(item.title)}</strong></div>
+              <div class="muted">${esc(item.course)} (${esc(item.kind)}${subMeta})</div>
             </td>
             <td>
-              <div class="mono">${esc(t.deadline_raw || "Unspecified")}</div>
+              <div class="mono">${esc(item.deadline_raw || "Unspecified")}</div>
               <div class="${cd.cls}">${esc(cd.text)}</div>
             </td>
-            <td><span class="badge ${prioCls}">${esc(t.priority)}</span></td>
-            <td><span class="badge ${statusCls}">${esc(t.status)}</span></td>
+            <td><span class="badge ${prioCls}">${esc(item.priority)}</span></td>
+            <td><span class="badge ${statusCls}">${esc(item.status)}</span></td>
             <td>
               <div class="actions">
-                <button onclick="openDetail(${t.id})">Details</button>
-                <button onclick="markDone(${t.id})" ${isDone ? "disabled" : ""}>Done</button>
-                <button onclick="snoozeTask(${t.id})" ${isDone ? "disabled" : ""}>Snooze</button>
-                <button onclick="downloadIcs('${esc(t.ics_file || "")}')" ${hasIcs ? "" : "disabled"}>.ics</button>
-                <button class="danger" onclick="deleteTask(${t.id})">Delete</button>
+                <button onclick="openDetail(${item.id})">${esc(t("btn_details"))}</button>
+                <button onclick="markDone(${item.id})" ${doneDis}>${esc(t("btn_done"))}</button>
+                <button onclick="snoozeTask(${item.id})">${esc(t("btn_snooze"))}</button>
+                ${item.ics_file ? `<button onclick="downloadIcs('${esc(item.ics_file)}')">.ics</button>` : ""}
+                <button class="danger" onclick="deleteTask(${item.id})">${esc(t("btn_delete"))}</button>
               </div>
             </td>
           </tr>
         `;
       }).join("");
+    }
+
+    function renderCalendar(filtered) {
+      const year = calCursor.getFullYear();
+      const month = calCursor.getMonth();
+      const locale = currentLang === "id" ? "id-ID" : "en-US";
+      document.getElementById("cal-month-label").textContent =
+        new Date(year, month, 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
+
+      const firstDay = new Date(year, month, 1);
+      const startOffset = firstDay.getDay();
+      const startDate = new Date(year, month, 1 - startOffset);
+      const todayKey = new Date().toDateString();
+
+      const byDate = {};
+      for (const item of filtered) {
+        if (!item.deadline_utc) continue;
+        const d = new Date(item.deadline_utc);
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        if (!byDate[key]) byDate[key] = [];
+        byDate[key].push(item);
+      }
+
+      const dows = I18N[currentLang].dows || I18N.en.dows;
+      let html = dows.map(d => `<div class="cal-dow">${esc(d)}</div>`).join("");
+      for (let i = 0; i < 42; i++) {
+        const cellDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+        const isOther = cellDate.getMonth() !== month;
+        const isToday = cellDate.toDateString() === todayKey;
+        const key = `${cellDate.getFullYear()}-${cellDate.getMonth()}-${cellDate.getDate()}`;
+        const items = byDate[key] || [];
+        const chips = items.map(item => {
+          let cls = "open";
+          if (item.status === "COMPLETED" || item.status === "ARCHIVED") {
+            cls = "done";
+          } else if (new Date(item.deadline_utc).getTime() <= Date.now()) {
+            cls = "overdue";
+          } else if (new Date(item.deadline_utc).getTime() - Date.now() <= 72 * 3600000) {
+            cls = "soon";
+          }
+          return `<button class="cal-chip ${cls}" title="${esc(item.course)}: ${esc(item.title)}" onclick="openDetail(${item.id})">${esc(item.title)}</button>`;
+        }).join("");
+        html += `
+          <div class="cal-cell ${isOther ? "other-month" : ""} ${isToday ? "today" : ""}">
+            <div class="cal-day">${cellDate.getDate()}</div>
+            ${chips}
+          </div>
+        `;
+      }
+      document.getElementById("cal-grid").innerHTML = html;
     }
 
     async function markDone(id) {
@@ -473,8 +965,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "COMPLETED" })
         });
-        if (!resp.ok) throw new Error(await resp.text());
-        showNotice(`Task #${id} marked as COMPLETED.`);
+        if (!resp.ok) throw new Error((await resp.json()).error || "Update failed");
+        showNotice(`Task #${id} -> COMPLETED.`);
         await loadTasks();
       } catch (err) {
         showNotice(err.message);
@@ -488,8 +980,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ hours: 24 })
         });
-        if (!resp.ok) throw new Error(await resp.text());
-        showNotice(`Snoozed reminders for task #${id} by 24h.`);
+        if (!resp.ok) throw new Error((await resp.json()).error || "Snooze failed");
+        showNotice(`Snoozed alerts for task #${id} by 24h.`);
         await loadTasks();
       } catch (err) {
         showNotice(err.message);
@@ -499,7 +991,7 @@
     async function deleteTask(id) {
       try {
         const resp = await apiFetch(`/api/tasks/${id}`, { method: "DELETE" });
-        if (!resp.ok) throw new Error(await resp.text());
+        if (!resp.ok) throw new Error((await resp.json()).error || "Delete failed");
         showNotice(`Deleted task #${id}.`);
         await loadTasks();
       } catch (err) {
@@ -507,18 +999,33 @@
       }
     }
 
+    async function toggleSubtask(taskId, idx) {
+      const task = tasksCache.find(x => x.id === taskId);
+      if (!task) return;
+      const doneSet = new Set(task.subtasks_done || []);
+      if (doneSet.has(idx)) doneSet.delete(idx);
+      else doneSet.add(idx);
+      const nextDone = Array.from(doneSet).sort((a, b) => a - b);
+      try {
+        const resp = await apiFetch(`/api/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subtasks_done: nextDone })
+        });
+        if (!resp.ok) throw new Error((await resp.json()).error || "Subtask update failed");
+        await loadTasks();
+        openDetail(taskId);
+      } catch (err) {
+        showNotice(err.message);
+      }
+    }
+
     async function downloadIcs(filename) {
-      if (!filename) return;
       try {
         const resp = await apiFetch(`/api/calendar/${encodeURIComponent(filename)}`);
-        if (!resp.ok) throw new Error("Failed downloading .ics file");
+        if (!resp.ok) throw new Error("Failed downloading .ics");
         const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
+        triggerDownload(blob, filename);
       } catch (err) {
         showNotice(err.message);
       }
@@ -527,54 +1034,147 @@
     async function exportTasks(fmt) {
       try {
         const resp = await apiFetch(`/api/tasks/export?format=${fmt}`);
+        if (!resp.ok) throw new Error("Export failed");
         const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `academic-tasks.${fmt}`;
-        a.click();
-        URL.revokeObjectURL(url);
+        triggerDownload(blob, `academic-tasks.${fmt}`);
       } catch (err) {
         showNotice(err.message);
       }
     }
 
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
     function openDetail(id) {
-      const t = tasksCache.find(item => item.id === id);
-      if (!t) return;
-      document.getElementById("detail-title").textContent = `#${t.id} ${t.title}`;
-      const subtasks = (t.subtasks || []).length
-        ? `<ul class="checklist">${t.subtasks.map(s => `<li>${esc(s)}</li>`).join("")}</ul>`
-        : '<p class="muted">No subtasks recorded.</p>';
-      const deliverables = (t.deliverables || []).length
-        ? esc(t.deliverables.join(", "))
+      const item = tasksCache.find(x => x.id === id);
+      if (!item) return;
+      document.getElementById("detail-title").textContent = `#${item.id} ${item.title}`;
+      const doneSet = new Set(item.subtasks_done || []);
+      const subtasks = (item.subtasks || []).length
+        ? `<ul class="checklist">${item.subtasks.map((s, idx) => {
+            const checked = doneSet.has(idx) ? "checked" : "";
+            return `<li><label><input type="checkbox" ${checked} onchange="toggleSubtask(${item.id}, ${idx})"><span class="${checked}">${esc(s)}</span></label></li>`;
+          }).join("")}</ul>`
+        : '<p class="muted">None recorded.</p>';
+      const deliverables = (item.deliverables || []).length
+        ? esc(item.deliverables.join(", "))
         : "Unspecified";
 
-      const gcalBtn = t.google_calendar_url
-        ? `<a class="btn-link primary" href="${esc(t.google_calendar_url)}" target="_blank" rel="noopener">Add to Google Calendar</a>`
+      const gcalBtn = item.google_calendar_url
+        ? `<a class="btn-link primary" href="${esc(item.google_calendar_url)}" target="_blank" rel="noopener">${esc(t("btn_gcal"))}</a>`
         : "";
-      const icsBtn = t.ics_file
-        ? `<button onclick="downloadIcs('${esc(t.ics_file)}')">Download .ics</button>`
+      const icsBtn = item.ics_file
+        ? `<button onclick="downloadIcs('${esc(item.ics_file)}')">${esc(t("btn_dl_ics"))}</button>`
         : "";
 
       document.getElementById("detail-body").innerHTML = `
-        <p>${esc(t.summary)}</p>
+        <p>${esc(item.summary)}</p>
         <div class="detail-grid">
-          <div class="detail-box"><div class="stat-label">Course</div><div>${esc(t.course)}</div></div>
-          <div class="detail-box"><div class="stat-label">Deadline</div><div class="mono">${esc(t.deadline_raw || "Unspecified")}</div></div>
-          <div class="detail-box"><div class="stat-label">Effort & Source</div><div>${t.estimated_hours}h via ${esc(t.extractor)}</div></div>
-          <div class="detail-box"><div class="stat-label">Deliverables</div><div>${deliverables}</div></div>
+          <div class="detail-box"><div class="stat-label">${esc(t("lbl_course"))}</div><div>${esc(item.course)}</div></div>
+          <div class="detail-box"><div class="stat-label">${esc(t("th_deadline"))}</div><div class="mono">${esc(item.deadline_raw || "Unspecified")}</div></div>
+          <div class="detail-box"><div class="stat-label">${esc(t("lbl_effort"))}</div><div>${item.estimated_hours}h (${esc(item.extractor)})</div></div>
+          <div class="detail-box"><div class="stat-label">${esc(t("lbl_deliverables"))}</div><div>${deliverables}</div></div>
         </div>
-        <strong>Subtask Checklist</strong>
+        <strong>${esc(t("lbl_checklist"))}</strong>
         ${subtasks}
         <div class="modal-actions">
           ${gcalBtn}
           ${icsBtn}
-          <button onclick="markDone(${t.id}); document.getElementById('detail-modal').close();">Mark Done</button>
-          <button onclick="snoozeTask(${t.id}); document.getElementById('detail-modal').close();">Snooze 24h</button>
+          <button onclick="openEditModal(${item.id})">${esc(t("btn_edit"))}</button>
+          <button onclick="markDone(${item.id}); document.getElementById('detail-modal').close();">${esc(t("btn_done"))}</button>
+          <button onclick="snoozeTask(${item.id}); document.getElementById('detail-modal').close();">${esc(t("btn_snooze24"))}</button>
         </div>
       `;
       document.getElementById("detail-modal").showModal();
+    }
+
+    function openEditModal(id) {
+      const item = tasksCache.find(x => x.id === id);
+      if (!item) return;
+      document.getElementById("detail-modal").close();
+      document.getElementById("edit-id").value = item.id;
+      document.getElementById("edit-title-inp").value = item.title;
+      document.getElementById("edit-course-inp").value = item.course;
+      document.getElementById("edit-deadline-inp").value = item.deadline_raw || "";
+      document.getElementById("edit-priority-inp").value = item.priority;
+      document.getElementById("edit-status-inp").value = item.status;
+      document.getElementById("edit-summary-inp").value = item.summary;
+      document.getElementById("edit-subtasks-inp").value = (item.subtasks || []).join("\n");
+      document.getElementById("edit-modal").showModal();
+    }
+
+    async function copyFeedUrl(courseFilter) {
+      const token = getToken();
+      const params = new URLSearchParams();
+      if (token) params.set("token", token);
+      if (courseFilter) params.set("course", courseFilter);
+      const qs = params.toString();
+      const feedUrl = qs
+        ? `${window.location.origin}/api/calendar/feed.ics?${qs}`
+        : `${window.location.origin}/api/calendar/feed.ics`;
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(feedUrl);
+          copied = true;
+        }
+      } catch {}
+      showNotice(copied
+        ? `Copied iCalendar URL: ${feedUrl}`
+        : `iCalendar URL: ${feedUrl}`);
+    }
+
+    async function loadLmsSources() {
+      const box = document.getElementById("lms-sources-box");
+      try {
+        const resp = await apiFetch("/api/lms/sources");
+        const data = await resp.json();
+        const srcs = data.sources || [];
+        if (!srcs.length) {
+          box.innerHTML = '<div class="muted">No saved [lms.sources] in TOML yet; use the form above to sync any LMS URL immediately.</div>';
+          return;
+        }
+        box.innerHTML = '<strong>Configured LMS Sources</strong>' + srcs.map(s => {
+          const ev = s.meta ? s.meta.last_event_count : 0;
+          return `<div class="doctor-item" style="margin-top:6px;">
+            <div><strong>${esc(s.name)}</strong> <span class="badge pending">${esc(s.kind)}</span></div>
+            <div class="muted mono">${esc(s.url)} (events: ${ev})</div>
+          </div>`;
+        }).join("");
+      } catch (err) {
+        box.innerHTML = `<div class="muted">${esc(err.message)}</div>`;
+      }
+    }
+
+    async function openDoctorModal() {
+      const body = document.getElementById("doctor-body");
+      body.innerHTML = '<div class="muted">Running checks...</div>';
+      document.getElementById("doctor-modal").showModal();
+      try {
+        const resp = await apiFetch("/api/doctor");
+        const rep = await resp.json();
+        body.innerHTML = `<div class="doctor-list">` + (rep.checks || []).map(c => {
+          const cls = c.status === "PASS" ? "pass" : (c.status === "FAIL" ? "fail" : "warn");
+          return `<div class="doctor-item">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <strong>${esc(c.name)}</strong>
+              <span class="badge ${cls}">${esc(c.status)}</span>
+            </div>
+            <div style="margin-top:4px;font-size:13px;">${esc(c.summary)}</div>
+            ${c.status !== "PASS" ? `<div class="muted" style="margin-top:3px;">Hint: ${esc(c.hint)}</div>` : ""}
+          </div>`;
+        }).join("") + `</div>`;
+      } catch (err) {
+        body.innerHTML = `<div class="muted">${esc(err.message)}</div>`;
+      }
     }
 
     async function runCronTick() {
@@ -591,29 +1191,53 @@
       }
     }
 
-    document.getElementById("search").addEventListener("input", renderTable);
-    document.getElementById("status-filter").addEventListener("change", renderTable);
-    document.getElementById("priority-filter").addEventListener("change", renderTable);
+    document.getElementById("search").addEventListener("input", renderCurrentView);
+    document.getElementById("course-filter").addEventListener("change", renderCurrentView);
+    document.getElementById("status-filter").addEventListener("change", renderCurrentView);
+    document.getElementById("priority-filter").addEventListener("change", renderCurrentView);
+    document.getElementById("view-list-btn").addEventListener("click", () => {
+      currentView = "list";
+      document.getElementById("view-list-btn").classList.add("active");
+      document.getElementById("view-cal-btn").classList.remove("active");
+      renderCurrentView();
+    });
+    document.getElementById("view-cal-btn").addEventListener("click", () => {
+      currentView = "calendar";
+      document.getElementById("view-cal-btn").classList.add("active");
+      document.getElementById("view-list-btn").classList.remove("active");
+      renderCurrentView();
+    });
+    document.getElementById("cal-prev").addEventListener("click", () => {
+      calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() - 1, 1);
+      renderCurrentView();
+    });
+    document.getElementById("cal-next").addEventListener("click", () => {
+      calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + 1, 1);
+      renderCurrentView();
+    });
+    document.getElementById("cal-today").addEventListener("click", () => {
+      calCursor = new Date();
+      renderCurrentView();
+    });
+
     document.getElementById("refresh-btn").addEventListener("click", loadTasks);
     document.getElementById("cron-btn").addEventListener("click", runCronTick);
-    document.getElementById("feed-btn").addEventListener("click", async () => {
-      const token = sessionStorage.getItem("academic_token") || "";
-      const feedUrl = token
-        ? `${window.location.origin}/api/calendar/feed.ics?token=${encodeURIComponent(token)}`
-        : `${window.location.origin}/api/calendar/feed.ics`;
-      let copied = false;
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(feedUrl);
-          copied = true;
-        }
-      } catch {}
-      showNotice(copied
-        ? `Copied iCalendar feed URL to clipboard: ${feedUrl}`
-        : `iCalendar subscription URL: ${feedUrl}`);
+    document.getElementById("feed-btn").addEventListener("click", () => copyFeedUrl(""));
+    document.getElementById("share-course-btn").addEventListener("click", () => {
+      const c = document.getElementById("course-filter").value;
+      if (!c) {
+        showNotice("Select a course in the Course dropdown first to copy a class-specific feed URL.");
+        return;
+      }
+      copyFeedUrl(c);
     });
     document.getElementById("export-json-btn").addEventListener("click", () => exportTasks("json"));
     document.getElementById("export-csv-btn").addEventListener("click", () => exportTasks("csv"));
+    document.getElementById("lang-btn").addEventListener("click", () => {
+      currentLang = currentLang === "en" ? "id" : "en";
+      localStorage.setItem("academic_lang", currentLang);
+      applyI18n();
+    });
     document.getElementById("theme-btn").addEventListener("click", () => {
       const root = document.documentElement;
       root.dataset.theme = root.dataset.theme === "light" ? "" : "light";
@@ -628,13 +1252,37 @@
     document.getElementById("open-add-btn").addEventListener("click", () => {
       document.getElementById("add-modal").showModal();
     });
+    document.getElementById("open-lms-btn").addEventListener("click", () => {
+      loadLmsSources();
+      document.getElementById("lms-modal").showModal();
+    });
+    document.getElementById("open-doctor-btn").addEventListener("click", openDoctorModal);
+
+    // Drag and drop upload wiring
+    const dz = document.getElementById("dropzone");
+    const fileInp = document.getElementById("upload-file");
+    dz.addEventListener("click", () => fileInp.click());
+    dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("drag"); });
+    dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+    dz.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dz.classList.remove("drag");
+      if (e.dataTransfer && e.dataTransfer.files.length) {
+        fileInp.files = e.dataTransfer.files;
+        document.getElementById("dropzone-label").textContent = fileInp.files[0].name;
+      }
+    });
+    fileInp.addEventListener("change", () => {
+      if (fileInp.files.length) {
+        document.getElementById("dropzone-label").textContent = fileInp.files[0].name;
+      }
+    });
 
     document.getElementById("upload-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const fileInput = document.getElementById("upload-file");
-      if (!fileInput.files.length) return;
+      if (!fileInp.files.length) return;
       const form = new FormData();
-      form.append("file", fileInput.files[0]);
+      form.append("file", fileInp.files[0]);
       const heuristic = document.getElementById("upload-heuristic").checked;
       const notify = document.getElementById("upload-notify").checked;
       try {
@@ -645,7 +1293,8 @@
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || "Upload failed");
         document.getElementById("upload-modal").close();
-        fileInput.value = "";
+        fileInp.value = "";
+        document.getElementById("dropzone-label").textContent = t("dropzone_hint");
         showNotice(`${data.duplicate ? "Duplicate skipped" : "Ingested"} task #${data.task.id}: ${data.task.title}`);
         await loadTasks();
       } catch (err) {
@@ -679,6 +1328,66 @@
       }
     });
 
+    document.getElementById("edit-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("edit-id").value;
+      const subtasks = document.getElementById("edit-subtasks-inp").value
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      const body = {
+        title: document.getElementById("edit-title-inp").value.trim(),
+        course: document.getElementById("edit-course-inp").value.trim(),
+        deadline: document.getElementById("edit-deadline-inp").value.trim(),
+        priority: document.getElementById("edit-priority-inp").value,
+        status: document.getElementById("edit-status-inp").value,
+        summary: document.getElementById("edit-summary-inp").value.trim(),
+        subtasks
+      };
+      try {
+        const resp = await apiFetch(`/api/tasks/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Edit failed");
+        document.getElementById("edit-modal").close();
+        showNotice(`Updated task #${data.task.id}.`);
+        await loadTasks();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    });
+
+    document.getElementById("lms-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = {
+        kind: document.getElementById("lms-kind").value,
+        url: document.getElementById("lms-url").value.trim(),
+        name: document.getElementById("lms-name").value.trim() || "campus-lms",
+        course: document.getElementById("lms-course").value.trim() || "Campus LMS",
+        token: document.getElementById("lms-token").value.trim() || null,
+        notify: document.getElementById("lms-notify").checked
+      };
+      try {
+        const resp = await apiFetch("/api/lms/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "LMS sync failed");
+        const rep = (data.reports || [])[0] || {};
+        showNotice(`LMS sync '${rep.source_name || body.name}': inserted=${rep.inserted || 0}, updated=${rep.updated || 0}, unchanged=${rep.unchanged || 0}.`);
+        document.getElementById("lms-modal").close();
+        await loadTasks();
+      } catch (err) {
+        showNotice(err.message);
+      }
+    });
+
+    applyI18n();
     loadTasks();
   </script>
 </body>

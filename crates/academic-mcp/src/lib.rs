@@ -5,13 +5,14 @@ use academic_core::calendar::{
     create_ics_event, filter_tasks_for_feed, generate_ics_feed, parse_deadline_in_tz,
     CalendarEventSpec,
 };
-use academic_core::config::{redact_config_toml, Config};
+use academic_core::config::{redact_config_toml, Config, LmsSourceConfig, LmsSourceKind};
 use academic_core::error::{Error, Result};
 use academic_core::extract::{Priority, TaskKind};
+use academic_core::lms_sync::{sync_all_lms_sources, sync_lms_source};
 use academic_core::notify::dispatch_new_task;
 use academic_core::parser::{safe_join_within, sha256_hex};
 use academic_core::pipeline::AcademicPipeline;
-use academic_core::store::{InsertOutcome, NewTask, TaskRecord, TaskStatus, TaskStore};
+use academic_core::store::{InsertOutcome, NewTask, TaskPatch, TaskRecord, TaskStatus, TaskStore};
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -144,12 +145,14 @@ impl McpServer {
         let outcome: Result<Value> = match name {
             "list_tasks" => self.tool_list_tasks(&args),
             "add_task" => self.tool_add_task(&args).await,
+            "update_task" => self.tool_update_task(&args).await,
             "update_status" => self.tool_update_status(&args),
             "snooze_task" => self.tool_snooze_task(&args),
             "scan_document" => self.tool_scan_document(&args).await,
             "upcoming_deadlines" => self.tool_upcoming_deadlines(&args),
             "export_ics" => self.tool_export_ics(&args).await,
             "send_digest" => self.tool_send_digest(&args).await,
+            "sync_lms" => self.tool_sync_lms(&args).await,
             unknown => Err(Error::NotFound(format!("unknown tool '{unknown}'"))),
         };
 
@@ -407,6 +410,133 @@ impl McpServer {
         Ok(serde_json::to_value(res)?)
     }
 
+    async fn tool_update_task(&self, args: &Value) -> Result<Value> {
+        let task_id = req_u64(args, "task_id")?;
+        let cfg = self.config.read().await.clone();
+        let tz = cfg.timezone_tz()?;
+
+        let mut refresh_cal = false;
+        let mut patch = TaskPatch::default();
+        if let Some(title) = args.get("title").and_then(|v| v.as_str()) {
+            patch.title = Some(title.to_string());
+            refresh_cal = true;
+        }
+        if let Some(course) = args.get("course").and_then(|v| v.as_str()) {
+            patch.course = Some(course.to_string());
+            refresh_cal = true;
+        }
+        if let Some(kind_str) = args.get("kind").and_then(|v| v.as_str()) {
+            patch.kind = Some(TaskKind::parse_loose(kind_str));
+        }
+        if let Some(dl_val) = args.get("deadline") {
+            refresh_cal = true;
+            if dl_val.is_null() {
+                patch.deadline_raw = Some(None);
+                patch.deadline_utc = Some(None);
+            } else if let Some(s) = dl_val.as_str() {
+                let trimmed = s.trim();
+                if trimmed.is_empty() {
+                    patch.deadline_raw = Some(None);
+                    patch.deadline_utc = Some(None);
+                } else {
+                    let parsed = parse_deadline_in_tz(trimmed, tz).ok_or_else(|| {
+                        Error::Parse(format!("could not parse deadline '{trimmed}'"))
+                    })?;
+                    patch.deadline_raw = Some(Some(trimmed.to_string()));
+                    patch.deadline_utc = Some(Some(parsed.with_timezone(&Utc)));
+                }
+            }
+        }
+        if let Some(prio) = args.get("priority").and_then(|v| v.as_str()) {
+            patch.priority = Some(Priority::parse_loose(prio));
+        }
+        if let Some(st) = args.get("status").and_then(|v| v.as_str()) {
+            patch.status = Some(TaskStatus::parse_loose(st)?);
+        }
+        if let Some(hours) = args.get("estimated_hours").and_then(|v| v.as_u64()) {
+            patch.estimated_hours = Some(hours.max(1) as u32);
+        }
+        if let Some(summary) = args.get("summary").and_then(|v| v.as_str()) {
+            patch.summary = Some(summary.to_string());
+        }
+        if args.get("subtasks").is_some() {
+            patch.subtasks = Some(json_string_list(args.get("subtasks")));
+        }
+        if let Some(done_arr) = args.get("subtasks_done").and_then(|v| v.as_array()) {
+            let done_indices: Vec<usize> = done_arr
+                .iter()
+                .filter_map(|v| v.as_u64().map(|n| n as usize))
+                .collect();
+            patch.subtasks_done = Some(done_indices);
+        }
+        if args.get("deliverables").is_some() {
+            patch.deliverables = Some(json_string_list(args.get("deliverables")));
+        }
+
+        let mut updated = self.store.update_task(task_id, patch)?;
+        if refresh_cal && (updated.deadline_raw.is_some() || updated.deadline_utc.is_some()) {
+            let _ = ensure_calendar_artifact(&cfg, &self.store, &updated)?;
+            if let Some(fresh) = self.store.get_task(task_id)? {
+                updated = fresh;
+            }
+        }
+        Ok(json!({ "task": updated }))
+    }
+
+    async fn tool_sync_lms(&self, args: &Value) -> Result<Value> {
+        let cfg = self.config.read().await.clone();
+        let notify = args.get("notify").and_then(|v| v.as_bool());
+        if let Some(raw_url) = args
+            .get("url")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if !(raw_url.starts_with("http://") || raw_url.starts_with("https://")) {
+                return Err(Error::Config(
+                    "LMS 'url' must start with http:// or https://".to_string(),
+                ));
+            }
+            let kind = args
+                .get("kind")
+                .and_then(|v| v.as_str())
+                .map(LmsSourceKind::parse_loose)
+                .transpose()?
+                .unwrap_or(LmsSourceKind::IcsFeed);
+            let src = LmsSourceConfig {
+                name: args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("ad-hoc-lms")
+                    .to_string(),
+                kind,
+                url: raw_url.to_string(),
+                token: args
+                    .get("token")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string(),
+                default_course: args
+                    .get("course")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("Campus LMS")
+                    .to_string(),
+                enabled: true,
+            };
+            let report = sync_lms_source(&self.store, &cfg, &src, notify).await?;
+            return Ok(json!({ "reports": [report] }));
+        }
+
+        let source_filter = args.get("source").and_then(|v| v.as_str());
+        let reports = sync_all_lms_sources(&self.store, &cfg, source_filter, notify).await?;
+        Ok(json!({ "reports": reports }))
+    }
+
     async fn handle_resource_read(
         &self,
         params: &Value,
@@ -659,6 +789,44 @@ fn tool_definitions() -> Vec<Value> {
                 }
             }
         }),
+        json!({
+            "name": "update_task",
+            "description": "Edit task fields (title, course, deadline, priority, status, summary, subtasks, subtasks_done, deliverables).",
+            "inputSchema": {
+                "type": "object",
+                "required": ["task_id"],
+                "properties": {
+                    "task_id": { "type": "integer", "minimum": 1 },
+                    "title": { "type": "string" },
+                    "course": { "type": "string" },
+                    "kind": { "type": "string", "enum": ["assignment", "quiz", "exam", "syllabus", "announcement", "general"] },
+                    "deadline": { "type": ["string", "null"] },
+                    "priority": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+                    "status": { "type": "string", "enum": ["PENDING", "IN_PROGRESS", "COMPLETED", "ARCHIVED"] },
+                    "estimated_hours": { "type": "integer", "minimum": 1 },
+                    "summary": { "type": "string" },
+                    "subtasks": { "type": "array", "items": { "type": "string" } },
+                    "subtasks_done": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+                    "deliverables": { "type": "array", "items": { "type": "string" } }
+                }
+            }
+        }),
+        json!({
+            "name": "sync_lms",
+            "description": "Synchronize assignments and deadlines from configured [lms.sources] or an ad-hoc .ics/Moodle/Canvas URL.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "source": { "type": "string", "description": "Optional configured source name to sync." },
+                    "url": { "type": "string", "description": "Optional ad-hoc LMS .ics feed URL or Moodle/Canvas base URL." },
+                    "kind": { "type": "string", "enum": ["ics_feed", "moodle_api", "canvas_api"] },
+                    "token": { "type": "string", "description": "Optional Moodle wstoken or Canvas Bearer token." },
+                    "course": { "type": "string", "description": "Fallback course name for incoming events." },
+                    "name": { "type": "string" },
+                    "notify": { "type": "boolean" }
+                }
+            }
+        }),
     ]
 }
 
@@ -820,11 +988,11 @@ mod tests {
             .handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)
             .await
             .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 8);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 10);
 
         let added = srv
             .handle_message(
-                r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_task","arguments":{"title":"Compiler Design Homework","course":"Compilers","deadline":"2026-12-01 23:59","priority":"HIGH"}}}"#,
+                r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_task","arguments":{"title":"Compiler Design Homework","course":"Compilers","deadline":"2026-12-01 23:59","priority":"HIGH","subtasks":["Build lexer","Write parser"]}}}"#,
             )
             .await
             .unwrap();
@@ -832,6 +1000,17 @@ mod tests {
             serde_json::from_str(added["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(added_body["duplicate"], false);
         assert_eq!(added_body["task"]["id"], 1);
+
+        let edited = srv
+            .handle_message(
+                r#"{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{"name":"update_task","arguments":{"task_id":1,"subtasks_done":[0],"status":"IN_PROGRESS"}}}"#,
+            )
+            .await
+            .unwrap();
+        let edited_body: Value =
+            serde_json::from_str(edited["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(edited_body["task"]["subtasks_done"], json!([0]));
+        assert_eq!(edited_body["task"]["status"], "IN_PROGRESS");
 
         let scanned = srv
             .handle_message(

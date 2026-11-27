@@ -254,4 +254,84 @@ async fn test_serve_security_upload_webdelta_hmac_and_mcp_http() {
     let filtered_text = feed_filtered.text().await.unwrap();
     assert!(filtered_text.contains("Architecture RFC"));
     assert!(!filtered_text.contains("Campus Notice Board"));
+
+    // 9. PATCH /api/tasks/{id} edits fields and toggles subtask completion
+    let patched = client
+        .patch(format!("{base}/api/tasks/1"))
+        .bearer_auth(token)
+        .json(&json!({
+            "title": "Architecture RFC v2",
+            "subtasks": ["Draft RFC", "Peer review", "Submit PDF"],
+            "subtasks_done": [0, 2],
+            "status": "IN_PROGRESS"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(patched.status().as_u16(), 200);
+    let patched_json: Value = patched.json().await.unwrap();
+    assert_eq!(patched_json["task"]["title"], "Architecture RFC v2");
+    assert_eq!(patched_json["task"]["subtasks_done"], json!([0, 2]));
+    assert_eq!(patched_json["task"]["status"], "IN_PROGRESS");
+
+    // 10. GET /api/doctor returns health checks
+    let doc_resp = client
+        .get(format!("{base}/api/doctor"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(doc_resp.status().as_u16(), 200);
+    let doc_json: Value = doc_resp.json().await.unwrap();
+    assert_eq!(doc_json["ok"], true);
+    assert!(doc_json["checks"].as_array().unwrap().len() >= 8);
+
+    // 11. POST /api/lms/sync imports tasks from a campus .ics feed URL
+    let feed_ics = concat!(
+        "BEGIN:VCALENDAR\r\n",
+        "VERSION:2.0\r\n",
+        "BEGIN:VEVENT\r\n",
+        "UID:lms-e2e-1\r\n",
+        "DTSTART:20261224T165900Z\r\n",
+        "SUMMARY:Tugas Sistem Cerdas\r\n",
+        "CATEGORIES:AI Systems\r\n",
+        "END:VEVENT\r\n",
+        "END:VCALENDAR\r\n",
+    );
+    let lms_router = axum::Router::new().route(
+        "/campus.ics",
+        axum::routing::get(move || async move {
+            (
+                [(axum::http::header::CONTENT_TYPE, "text/calendar")],
+                feed_ics,
+            )
+        }),
+    );
+    let lms_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let lms_addr = lms_listener.local_addr().unwrap();
+    let lms_task = tokio::spawn(async move {
+        let _ = axum::serve(lms_listener, lms_router).await;
+    });
+
+    let sync_resp = client
+        .post(format!("{base}/api/lms/sync"))
+        .bearer_auth(token)
+        .json(&json!({
+            "kind": "ics_feed",
+            "url": format!("http://{lms_addr}/campus.ics"),
+            "name": "campus-test",
+            "course": "Campus LMS",
+            "notify": false
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(sync_resp.status().as_u16(), 200);
+    let sync_json: Value = sync_resp.json().await.unwrap();
+    assert_eq!(sync_json["reports"][0]["inserted"], 1);
+    assert_eq!(
+        sync_json["reports"][0]["tasks_changed"][0]["course"],
+        "AI Systems"
+    );
+    lms_task.abort();
 }
