@@ -1,12 +1,12 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Single-binary academic task extractor, live iCalendar feed, cron reminder, Discord bot, and MCP server",
   "homepage": "https://github.com/luminariadev/academic-agent",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/luminariadev/academic-agent/releases/download/v0.2.0/academic-agent-v0.2.0-x86_64-pc-windows-msvc.zip",
-      "hash": "9a5152e52d7b0f28dd93d81558d3ac9a2a3a4151b2dd39a6b5e0df716d73af9c"
+      "url": "https://github.com/luminariadev/academic-agent/releases/download/v0.3.0/academic-agent-v0.3.0-x86_64-pc-windows-msvc.zip",
+      "hash": "29e5db996ad75d73b3f1566aa3d37b2e9d28e643f551d2ddf2dcb41c49210127"
     }
   },
   "bin": "academic-agent.exe",
