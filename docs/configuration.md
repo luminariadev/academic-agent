@@ -75,3 +75,17 @@
 | `n8n.enabled` | `false` | Forward newly extracted tasks to an n8n webhook. |
 | `n8n.webhook_url` | `"${N8N_WEBHOOK_URL}"` | Target n8n webhook URL. |
 | `n8n.secret` | `"${N8N_WEBHOOK_SECRET}"` | Optional HMAC-SHA256 signing secret sent in `X-Academic-Signature`. |
+
+### `[lms]` and `[[lms.sources]]`
+
+| Key | Default | Description |
+| :--- | :--- | :--- |
+| `lms.enabled` | `false` | Enable automatic background LMS synchronization under `serve --with-lms-sync`. |
+| `lms.sync_interval_secs` | `900` | Polling interval in seconds (minimum effective loop interval 30s). |
+| `lms.notify_on_sync` | `true` | Dispatch Discord, Hermes, and n8n notifications when new or shifted-deadline LMS tasks arrive. |
+| `lms.sources[].name` | `"campus-lms"` | Unique label for this LMS source (also tracks ETag cache state in `redb`). |
+| `lms.sources[].kind` | `"ics_feed"` | Connector mode: `ics_feed`, `moodle_api`, or `canvas_api`. |
+| `lms.sources[].url` | `""` | Exported `.ics` URL or LMS base URL (supports `${VAR}`; token query strings are automatically redacted in `academic://config` and `doctor`). |
+| `lms.sources[].token` | `""` | Optional Moodle Web Services `wstoken` or Canvas Bearer token. |
+| `lms.sources[].default_course` | `"Campus LMS"` | Fallback course label when incoming events omit a category/course tag. |
+| `lms.sources[].enabled` | `true` | Enable or pause this individual LMS source. |

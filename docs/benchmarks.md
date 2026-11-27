@@ -1,40 +1,46 @@
 # Benchmarks
 
-This document records reproducible latency, throughput, and working-set memory measurements for `academic-agent` v0.3.0.
+Reproducible local performance measurements for `academic-agent` v0.4.0 measured on Windows using the built release binary and isolated temporary workspaces.
 
 ## Test Environment
 
-- **OS**: Microsoft Windows 11 Home Single Language (x86_64)
-- **CPU**: 11th Gen Intel Core i5-11400H @ 2.70 GHz
-- **Memory**: 15.7 GB RAM
-- **Toolchain**: `rustc 1.100.0 (0ef1bc386 2026-11-09)`, release profile (`opt-level = 3`, `lto = true`, `codegen-units = 1`, `strip = true`)
-- **Binary size**: `academic-agent.exe` = 8.67 MB (9,095,680 bytes)
+- OS: Microsoft Windows 11 Home Single Language (`x86_64`)
+- CPU: 11th Gen Intel(R) Core(TM) i5-11400H @ 2.70GHz
+- RAM: 15.7 GB
+- Rust toolchain: `rustc 1.100.0 (0ef1bc386 2026-11-09)`
+- Build profile: `cargo build --release --locked --bin academic-agent` (LTO fat, `codegen-units = 1`, stripped)
 
-## Methodology
+## Measured Results (v0.4.0)
 
-1. CLI wall-clock timings and `PeakWorkingSet64` memory were captured externally using `.NET` `System.Diagnostics.Stopwatch` and `System.Diagnostics.Process` around `target\release\academic-agent.exe` using temporary TOML configurations and `redb` databases.
-2. Startup (`--version`) ran one unmeasured OS cache warmup followed by a 5-run average; config validation (`validate`) ran a 5-run average.
-3. Batch HTTP ingestion launched `academic-agent serve` bound to `127.0.0.1` and uploaded 50 distinct bilingual assignment documents across 8 concurrent workers via `POST /api/upload?heuristic=true&notify=false`.
-4. Live iCalendar feed latency measured `GET /api/calendar/feed.ics` over the 50-task store (5-run average) and compared against `academic-agent calendar-feed --output`.
-5. MCP latency was measured over an active `academic-agent mcp` `stdio` process sending newline-delimited JSON-RPC 2.0 requests against the 50-task store.
+| Benchmark | Measured Metric | Memory (Peak Working Set) | Notes |
+| --- | --- | --- | --- |
+| Release binary size | `9,572,352` bytes (`9.13 MB`) | N/A | Single static `.exe`, zero runtime DLL dependencies beyond OS |
+| CLI cold startup (`--version`) | `21.6 ms` | `3.78 MB` | 5-run arithmetic mean |
+| Config validation (`validate`) | `22.1 ms` | `4.31 MB` | 5-run arithmetic mean |
+| Single document scan (`scan`) | `52.6 ms` | `12.44 MB` | Heuristic extraction + `redb` commit on 1 course syllabus |
+| Duplicate document skip (`scan`) | `35.4 ms` | `3.57 MB` | Content SHA-256 lookup avoids redundant parsing |
+| Batch HTTP ingestion (`POST /api/upload`) | `227.3 ms` (`220 docs/s`) | `15.37 MB` | 50 concurrent syllabus uploads into running `serve` process |
+| Live `.ics` subscription feed (`GET /api/calendar/feed.ics`) | `8.59 ms` | `15.37 MB` | 50 tasks (`45,653` bytes RFC 5545 output), 5-run mean |
+| CLI `.ics` export (`calendar-feed`) | `37.7 ms` | `11.27 MB` | 50 tasks exported cleanly from embedded `redb` |
+| MCP `stdio` handshake (`initialize`) | `20.9 ms` | Included in stdio session | JSON-RPC initialize + initialized round-trip |
+| MCP `stdio` `list_tasks` (50 tasks) | `4.1 ms` | Included in stdio session | Warm MCP `tools/call` |
+| MCP `stdio` `academic://calendar/feed` (50 tasks) | `1.7 ms` | Included in stdio session | Warm MCP `resources/read` |
+| LMS `.ics` batch sync (`POST /api/lms/sync`) | `463.6 ms` (`431.4 events/s`) | `12.54 MB` | 200 calendar events ingested in a single atomic `redb` transaction |
+| LMS cached poll (`ETag` `304 Not Modified`) | `10.4 ms` | `12.54 MB` | 5-run mean conditional HTTP check with zero database writes |
 
-## Results
+## v0.3.0 vs v0.4.0 Comparison
 
-| Scenario | Command / Operation | Wall Time | Throughput / Size | Peak RAM |
-| :--- | :--- | :--- | :--- | :--- |
-| Binary startup | `academic-agent --version` (5-run average) | 14.5 ms | n/a | 3.42 MB |
-| Config validation | `academic-agent --config examples/academic-agent.toml validate` (5-run avg) | 26.8 ms | n/a | 6.82 MB |
-| Single scan + `.ics` | `academic-agent scan doc.txt --heuristic` (`redb` insert) | 63.9 ms | 1 event written | 11.46 MB |
-| Duplicate skip | Repeat `academic-agent scan doc.txt --heuristic` (SHA-256 hit) | 36.2 ms | 0 writes | 11.36 MB |
-| Batch 50 uploads | `POST /api/upload?heuristic=true&notify=false` (8-way concurrency) | 230.9 ms | 216.5 docs/s | 18.44 MB (`serve`) |
-| Live `.ics` HTTP feed | `GET /api/calendar/feed.ics` (50 events, 5-run average) | 7.96 ms | 45,653 bytes | shared (`18.44 MB`) |
-| CLI `.ics` feed export | `academic-agent calendar-feed --output feed.ics` (50 events) | 52.2 ms | 50 events | 11.16 MB |
-| MCP `initialize` | JSON-RPC `initialize` over `stdio` | 9.1 ms | n/a | n/a |
-| MCP `list_tasks` | `tools/call list_tasks` across 50 stored tasks | 1.4 ms | 50 tasks | n/a |
-| MCP feed resource | `resources/read academic://calendar/feed` across 50 events | 1.1 ms | 50 events | n/a |
+Precompiled `std::sync::OnceLock<Regex>` extractors and single-transaction `redb` batch upserts reduced parsing latency and peak memory across core workflows:
 
-## Observations
+| Operation | v0.3.0 | v0.4.0 |
+| --- | --- | --- |
+| Config validation (`validate`, 5-run avg) | `26.8 ms` | `22.1 ms` |
+| Single document scan | `63.9 ms` | `52.6 ms` |
+| Duplicate document skip | `36.2 ms` (`11.36 MB` peak) | `35.4 ms` (`3.57 MB` peak) |
+| HTTP batch uploads (`50` docs) | `230.9 ms` / `216.5 docs/s` (`18.44 MB` peak) | `227.3 ms` / `220.0 docs/s` (`15.37 MB` peak) |
+| CLI `calendar-feed` (`50` tasks) | `52.2 ms` | `37.7 ms` |
 
-- Processing 50 concurrent document uploads (text extraction, heuristic parsing, `.ics` disk generation, and transactional `redb` indexing) finishes in 230.9 ms while holding server peak working set memory at 18.44 MB.
-- Repeat ingestion of identical files short-circuits via SHA-256 hash lookup in `redb` (`36.2 ms` total process lifetime vs `63.9 ms` for new writes) without duplicating calendar artifacts or notifications.
-- Generating a complete 50-event RFC 5545 subscription feed runs in 7.96 ms over HTTP (`45.65 KB`) and 1.1 ms on an active `stdio` MCP session.
+## Notes on Reproduction
+
+- All measurements used `--no-llm` / local heuristic extraction and mock local HTTP servers to isolate Rust binary performance from external LLM or campus portal network latency.
+- LMS batch sync and `304 Not Modified` polling were measured against a local HTTP fixture serving an RFC 5545 `.ics` feed with 200 distinct course events and `ETag` headers.

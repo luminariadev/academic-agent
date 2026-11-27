@@ -51,7 +51,17 @@ python -m pytest connectors/lms-playwright/tests/test_lms_connector.py -v
 
 ## Adapting to Your University Portal
 
-1. Copy one of the starter selector manifests (`profiles/moodle-template.json` or `profiles/campus-generic.json`) to a gitignored local profile such as `profiles/my-campus.local.json`.
+If your campus already exposes an exported `.ics` calendar URL (Moodle / SPADA / Canvas / Google Classroom) or Moodle/Canvas REST APIs, use the native Rust `academic-agent lms sync` integration directly (see [docs/campus-lms-guide.md](campus-lms-guide.md)). Use the Playwright connector below for custom portals or SIAKAD dashboards without an API or calendar export.
+
+1. Auto-detect login selectors and generate a starter manifest using `discover`:
+
+```bash
+python connectors/lms-playwright/connector.py discover \
+  --url https://siakad.campus.ac.id/login \
+  --output connectors/lms-playwright/profiles/my-campus.local.json
+```
+
+Or copy one of the starter templates (`profiles/siakad-custom-template.json`, `profiles/spada-moodle-template.json`, `profiles/canvas-template.json`, `profiles/moodle-template.json`, or `profiles/campus-generic.json`) to `profiles/my-campus.local.json`.
 2. Update the CSS selectors (`username_selector`, `password_selector`, `submit_selector`, `logged_in_selector`, `course_paths`, `item_selector`, `title_selector`, `deadline_selector`, `attachment_selector`) to match your campus portal DOM.
 3. Authenticate interactively once and save browser cookies to a gitignored state file:
 

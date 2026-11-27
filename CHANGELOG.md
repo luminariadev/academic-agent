@@ -4,6 +4,25 @@ All notable changes to `academic-agent` are documented in this file.
 
 The format follows Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.4.0] - 2026-11-27
+
+### Added
+
+- Native LMS synchronization engine (`crates/academic-core/src/lms_sync.rs`) supporting three integration paths: RFC 5545 `.ics` subscription feeds (with line unfolding and `VALARM` isolation), Moodle Web Services REST API, and Canvas REST API with `ETag` and `If-Modified-Since` (`304 Not Modified`) caching.
+- Atomic single-transaction `redb` batch upsert (`upsert_lms_batch`) and `LMS_SYNC_META_TABLE` persistence with automatic stale reminder cleanup when assignment deadlines shift.
+- Eight-subsystem health check (`academic-agent doctor`, `GET /api/doctor`) with URL credential and query-token redaction.
+- Guided onboarding wizard (`academic-agent setup`, `setup --non-interactive`, `serve --init-if-missing`), LMS CLI subcommands (`lms list`, `lms sync`), and background sync loop (`serve --with-lms-sync`).
+- REST endpoints (`PATCH /api/tasks/{id}`, `GET /api/lms/sources`, `POST /api/lms/sync`) and MCP tools (`update_task`, `sync_lms`), bringing MCP coverage to 10 tools and 5 read-only resources.
+- Bilingual (`ID`/`EN`) web dashboard updates (`crates/academic-cli/src/dashboard.html`) adding interactive subtask checkboxes, Task Edit modal, dynamic Course filter with Share Course Feed button, Monthly Calendar view (`List` | `Calendar`), drag-and-drop syllabus upload, Connect LMS modal, and System Health modal.
+- Playwright selector discovery wizard (`connectors/lms-playwright/connector.py discover`) and campus portal templates (`canvas-template.json`, `spada-moodle-template.json`, `siakad-custom-template.json`).
+- Campus role and integration guide (`docs/campus-lms-guide.md`) plus refreshed screenshots and reproducible `v0.4.0` benchmarks.
+
+### Changed
+
+- Compiled hot-path regular expressions once using `std::sync::OnceLock<Regex>` across `config.rs`, `calendar.rs`, and `extract.rs`.
+- Extended `TaskRecord` with `#[serde(default)]` `subtasks_done` progress tracking while preserving existing database records.
+- Synchronized Scoop (`packaging/scoop/academic-agent.json`) and Homebrew (`packaging/homebrew/academic-agent.rb`) manifests to verified `v0.3.0` release checksums.
+
 ## [0.3.0] - 2026-11-27
 
 ### Added
