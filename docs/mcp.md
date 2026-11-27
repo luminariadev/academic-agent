@@ -39,11 +39,12 @@ academic-agent serve --bind 127.0.0.1:8080 --token "${ACADEMIC_API_TOKEN}" --wit
 | `export_ics` | `task_id` | none | Generate/read RFC 5545 `.ics` content and Google Calendar link for a task. |
 | `send_digest` | none | `dry_run` | Summarize open tasks (`dry_run` defaults to `true`). |
 
-## Read-Only Resources (4)
+## Read-Only Resources (5)
 
 | URI / Template | MIME Type | Content |
 | :--- | :--- | :--- |
 | `academic://tasks` | `application/json` | Full JSON list of all stored tasks. |
 | `academic://upcoming` | `application/json` | Incomplete tasks due within 72 hours or already overdue. |
 | `academic://config` | `text/plain` | Active TOML configuration with literal secrets redacted. |
+| `academic://calendar/feed` | `text/calendar` | Live RFC 5545 `.ics` subscription feed of all open tasks with deadlines. |
 | `academic://calendar/{task_id}` | `text/calendar` | RFC 5545 `.ics` calendar payload for `{task_id}`. |

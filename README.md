@@ -2,11 +2,12 @@
 
 [![CI](https://github.com/luminariadev/academic-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/luminariadev/academic-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/luminariadev/academic-agent?display_name=tag)](https://github.com/luminariadev/academic-agent/releases)
+[![Docker GHCR](https://img.shields.io/badge/ghcr.io-academic--agent-blue)](https://github.com/luminariadev/academic-agent/pkgs/container/academic-agent)
 [![License](https://img.shields.io/github/license/luminariadev/academic-agent)](LICENSE)
 [![Rust 1.82+](https://img.shields.io/badge/rust-1.82%2B-orange)](https://www.rust-lang.org)
 [![MCP stdio + HTTP](https://img.shields.io/badge/MCP-stdio%20%2B%20HTTP-blue)](docs/mcp.md)
 
-A single-binary Rust assistant for ingesting academic documents, extracting assignments and deadlines, synchronizing timezone-accurate `.ics` calendars, running cron deadline reminders, dispatching Discord and Hermes notifications, and exposing task management over the Model Context Protocol (MCP).
+A single-binary Rust assistant for ingesting academic documents, extracting assignments and deadlines, publishing timezone-accurate `.ics` calendars and live iCalendar feeds, running cron deadline reminders, dispatching two-way Discord and Hermes notifications, and exposing task management over the Model Context Protocol (MCP).
 
 ## Why academic-agent
 
@@ -14,13 +15,13 @@ Syllabi, lecture PDFs, DOCX assignment sheets, and portal announcements arrive i
 
 - **Multi-format document ingestion**: parses `.pdf` (pure-Rust `lopdf`), `.docx` paragraphs and tables (`zip` + `quick-xml`), `.txt`, and `.md` files from CLI commands, folder watching (tracking both create and move/rename events), multipart HTTP uploads, and signed `webdelta` webhooks.
 - **Hybrid bilingual extractor**: queries any Chat Completions HTTP gateway for structured task extraction and falls back deterministically to a bilingual Indonesian and English heuristic parser (`15 Juli 2026`, `July 15, 2026`, `DD/MM/YYYY`, ISO timestamps) when offline.
-- **Timezone-accurate calendars**: generates RFC 5545 `.ics` files with dual reminders (`-P1D` and `-PT1H`) and 1-click Google Calendar links converted accurately from your configured IANA timezone (for example `Asia/Jakarta`) to UTC.
+- **Timezone-accurate calendars and live subscription feed**: generates RFC 5545 `.ics` files with dual reminders (`-P1D` and `-PT1H`), 1-click Google Calendar links converted accurately from your configured IANA timezone (for example `Asia/Jakarta`) to UTC, plus a live `GET /api/calendar/feed.ics` subscription endpoint (with `?token=`, `?course=`, and `?include_completed=`) and CLI `calendar-feed`.
 - **Embedded `redb` task store with deduplication**: computes SHA-256 content hashes inside ACID transactions so re-scanning or re-uploading the same document never duplicates tasks, calendars, or alerts.
 - **Cron reminder and digest scheduler**: dispatches a scheduled local-time daily digest plus tiered deadline alerts (default `H-72h`, `H-24h`, `H-3h`, and `OVERDUE`) with anti-spam persistence and per-task snoozing.
-- **Embedded local web dashboard**: serves a self-contained dark/light task management UI at `GET /` with urgency counters, status/priority filtering, document upload, manual task creation, `.ics`/JSON/CSV exports, and manual cron triggers.
+- **Embedded local web dashboard**: serves a self-contained dark/light task management UI at `GET /` with urgency counters, status/priority filtering, document upload, manual task creation, one-click `Calendar Feed` subscription URL copy, `.ics`/JSON/CSV exports, and manual cron triggers.
 - **Two-way Discord and Hermes integration**: sends structured embeds with interactive **Mark Done**, **Snooze 24h**, and **Add to Google Calendar** buttons over Discord REST v10 or Webhooks (`429 Retry-After` backoff), handles slash commands (`/tasks`, `/upcoming`, `/done`, `/snooze`, `/add`, `/digest`) and button callbacks over Discord Gateway (`intents: 0`), plus optional `hermes` CLI dispatch and outbound signed n8n webhooks.
 - **Optional Playwright LMS connector**: bridges JavaScript-heavy university portals into `academic-agent serve` via [connectors/lms-playwright/](connectors/lms-playwright/README.md) with persistent session cookies, attachment uploads, configurable site selector profiles, and a simulated campus LMS for offline testing.
-- **Built-in MCP server**: serves 8 MCP tools and 4 read-only `academic://` resources over `stdio` or Streamable HTTP (`POST /mcp`).
+- **Built-in MCP server**: serves 8 MCP tools and 5 read-only `academic://` resources (`academic://calendar/feed` included) over `stdio` or Streamable HTTP (`POST /mcp`).
 
 ## Dashboard Preview
 
@@ -54,6 +55,29 @@ flowchart LR
 ### Prebuilt Binaries
 
 Download standalone archives for Linux (`x86_64`), Windows (`x86_64`), and macOS (`x86_64` and Apple Silicon) with `SHA256SUMS.txt` from [GitHub Releases](https://github.com/luminariadev/academic-agent/releases).
+
+### Scoop (Windows)
+
+```powershell
+scoop install https://raw.githubusercontent.com/luminariadev/academic-agent/main/packaging/scoop/academic-agent.json
+```
+
+### Homebrew (macOS and Linux)
+
+```bash
+brew install --formula https://raw.githubusercontent.com/luminariadev/academic-agent/main/packaging/homebrew/academic-agent.rb
+```
+
+### Docker and GHCR
+
+Pull the multi-stage non-root image from GitHub Container Registry or build locally with Compose (see [docs/docker.md](docs/docker.md)):
+
+```bash
+docker pull ghcr.io/luminariadev/academic-agent:latest
+docker run -d -p 8080:8080 -v "$(pwd)/data:/data" ghcr.io/luminariadev/academic-agent:latest
+```
+
+See [docs/distribution.md](docs/distribution.md) for checksum verification, package manifest updates, and crate publishing order.
 
 ### Build from Source
 
@@ -153,13 +177,16 @@ Global flags: `--config <PATH>` (default `academic-agent.toml`), `--db <PATH>`, 
 | `academic-agent test-discord` | Send a synthetic verification embed via Discord or Hermes. |
 | `academic-agent discord register-commands [--guild]` | Register `/tasks`, `/upcoming`, `/done`, `/snooze`, `/add`, and `/digest` slash commands with Discord. |
 | `academic-agent discord bot` | Start the persistent Discord Gateway WebSocket listener (`intents: 0`). |
-| `academic-agent serve [--bind B] [--with-cron] [--with-watch] [--with-discord-bot]` | Start the web dashboard, REST API, `webdelta` webhook endpoint, background loops, and `/mcp`. |
+| `academic-agent serve [--bind B] [--with-cron] [--with-watch] [--with-discord-bot]` | Start the web dashboard, REST API, live `.ics` feed, `webdelta` webhook endpoint, background loops, and `/mcp`. |
 | `academic-agent mcp [--http <bind>] [--token <secret>]` | Run MCP over `stdio` or standalone Streamable HTTP. |
+| `academic-agent calendar-feed [--include-completed] [--course C] [--output F]` | Export an RFC 5545 `.ics` subscription feed of tracked tasks. |
 
-## Discord, Hermes, LMS Connector, n8n, and webdelta
+## Calendar Feed, Integrations, and Guides
 
+- **Live iCalendar subscription feed**: subscribe Google Calendar, Apple Calendar, or Outlook to `GET /api/calendar/feed.ics` (supports `?token=<api_token>`, `?course=<filter>`, and `?include_completed=true`), copy the live URL from the dashboard header **Calendar Feed** button, or export offline with `academic-agent calendar-feed`.
 - **Discord and Hermes**: see [docs/discord-and-hermes.md](docs/discord-and-hermes.md) for configuring Bot REST API v10, two-way Gateway slash commands (`/tasks`, `/upcoming`, `/done`, `/snooze`, `/add`, `/digest`) and button callbacks, `429 Retry-After` retries, and Hermes CLI fallback.
 - **Optional Playwright LMS connector**: see [docs/lms-playwright.md](docs/lms-playwright.md) for headless university portal scraping, persistent cookie reuse, selector manifests, and the built-in simulated campus LMS.
+- **Docker and distribution**: see [docs/docker.md](docs/docker.md) for non-root Docker Compose and GHCR usage, and [docs/distribution.md](docs/distribution.md) for Scoop, Homebrew, and `SHA256SUMS.txt` verification.
 - **Configuration reference**: see [docs/configuration.md](docs/configuration.md) for all TOML sections and environment variables.
 - **n8n and webdelta integration**: see [docs/webhooks-n8n.md](docs/webhooks-n8n.md) and [workflows/README.md](workflows/README.md) for importing `workflows/academic-agent.n8n.json` and forwarding signed `X-WebDelta-Signature` alerts from `webdelta` directly into `POST /api/webhooks/webdelta`.
 
@@ -178,7 +205,22 @@ Register the built-in `stdio` MCP server in any MCP-compatible client:
 }
 ```
 
-Tools exposed (`8`): `list_tasks`, `add_task`, `update_status`, `snooze_task`, `scan_document`, `upcoming_deadlines`, `export_ics`, and `send_digest`. Read-only resources exposed (`4`): `academic://tasks`, `academic://upcoming`, `academic://config`, and `academic://calendar/{task_id}`. See [docs/mcp.md](docs/mcp.md).
+Tools exposed (`8`): `list_tasks`, `add_task`, `update_status`, `snooze_task`, `scan_document`, `upcoming_deadlines`, `export_ics`, and `send_digest`. Read-only resources exposed (`5`): `academic://tasks`, `academic://upcoming`, `academic://config`, `academic://calendar/feed`, and `academic://calendar/{task_id}`. See [docs/mcp.md](docs/mcp.md).
+
+## Benchmarks
+
+Measured on Windows 11 x86_64 (Intel Core i5-11400H, 15.7 GB RAM) using the stripped LTO `v0.3.0` release binary (`academic-agent.exe`, `8.67 MB`):
+
+| Workload | Wall Time | Throughput / Payload | Peak RAM |
+| :--- | :--- | :--- | :--- |
+| Binary startup (`--version`, 5-run avg) | 14.5 ms | n/a | 3.42 MB |
+| Single `scan --heuristic` + `.ics` + `redb` write | 63.9 ms | 1 event written | 11.46 MB |
+| Repeat duplicate scan (SHA-256 skip) | 36.2 ms | 0 writes | 11.36 MB |
+| Batch 50 HTTP uploads (`POST /api/upload`, 8 workers) | 230.9 ms | 216.5 docs/s | 18.44 MB (`serve`) |
+| Live HTTP feed (`GET /api/calendar/feed.ics`, 50 events) | 7.96 ms | 45,653 bytes | shared (`18.44 MB`) |
+| MCP `resources/read academic://calendar/feed` (50 events) | 1.1 ms | 50 events | n/a |
+
+See [docs/benchmarks.md](docs/benchmarks.md) for full methodology and all 10 measured scenarios.
 
 ## Development and Testing
 
@@ -195,7 +237,7 @@ python -m pytest connectors/lms-playwright/tests/test_lms_connector.py -v
 
 - **v0.1.0**: Rust workspace overhaul (`academic-core`, `academic-mcp`, `academic-cli`), pure-Rust PDF/DOCX parsing, bilingual LLM/heuristic extraction, UTC-corrected `.ics` and Google Calendar links, `redb` content deduplication, cron reminder/digest scheduler, Discord + Hermes notifiers, Axum REST API with `webdelta` HMAC receiver, and `stdio` + HTTP MCP server.
 - **v0.2.0**: Two-way Discord Bot Gateway (slash commands and interactive action buttons), embedded web task dashboard with high-DPI previews, and optional Playwright LMS connector (`connectors/lms-playwright/`) validated against a simulated campus portal.
-- **v0.3.0**: Multi-OS prebuilt release archives with `SHA256SUMS.txt`, non-root Docker GHCR image, Scoop and Homebrew manifests, and measured benchmarks.
+- **v0.3.0**: Live RFC 5545 iCalendar subscription feed (`GET /api/calendar/feed.ics`, CLI `calendar-feed`, MCP `academic://calendar/feed`, and dashboard header button), non-root multi-stage Docker image with GHCR workflow and Compose, Scoop and Homebrew manifests with verified `SHA256SUMS.txt` hashes, and reproducible benchmarks.
 
 ## License
 

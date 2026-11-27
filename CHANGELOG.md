@@ -4,6 +4,21 @@ All notable changes to `academic-agent` are documented in this file.
 
 The format follows Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.3.0] - 2026-11-27
+
+### Added
+
+- Multi-event RFC 5545 iCalendar subscription feed generator (`academic_core::calendar::generate_ics_feed` and `filter_tasks_for_feed`) with deterministic task UIDs, `X-WR-CALNAME` / `X-WR-TIMEZONE` / `REFRESH-INTERVAL` headers, dual alarms on open tasks, and RFC 5545 text escaping.
+- Live feed exposure across every interface: `GET /api/calendar/feed.ics` (supporting Bearer header or `?token=` query auth plus `?include_completed=` and `?course=` filters), MCP resource `academic://calendar/feed`, CLI `academic-agent calendar-feed`, and a one-click `Calendar Feed` button in the embedded dashboard header.
+- Multi-stage non-root `Dockerfile`, `.dockerignore`, `docker-compose.yml`, and `.github/workflows/docker.yml` publishing GHCR images on semantic version tags.
+- Package manifests for Windows Scoop ([packaging/scoop/academic-agent.json](packaging/scoop/academic-agent.json)) and macOS/Linux Homebrew ([packaging/homebrew/academic-agent.rb](packaging/homebrew/academic-agent.rb)) pinned with verified release SHA-256 checksums.
+- Container deployment, distribution, and measured performance documentation ([docs/docker.md](docs/docker.md), [docs/distribution.md](docs/distribution.md), [docs/benchmarks.md](docs/benchmarks.md)).
+
+### Changed
+
+- Expanded read-only MCP resources to 5 total (4 static resources in `resources/list` including `academic://calendar/feed`, plus the `academic://calendar/{task_id}` template) and extended E2E tests (`serve_http_e2e`, `mcp_e2e`).
+- Extended GitHub Actions CI validation to check `packaging/scoop/academic-agent.json`, `Dockerfile`, and `docker-compose.yml`.
+
 ## [0.2.0] - 2026-11-27
 
 ### Added
