@@ -10,8 +10,8 @@ pub mod pipeline;
 pub mod store;
 
 pub use calendar::{
-    create_ics_event, generate_google_calendar_url, parse_deadline_in_tz, CalendarArtifact,
-    CalendarEventSpec,
+    create_ics_event, filter_tasks_for_feed, generate_google_calendar_url, generate_ics_feed,
+    parse_deadline_in_tz, CalendarArtifact, CalendarEventSpec,
 };
 pub use config::{
     expand_env_vars_with, load_dotenv_if_present, normalize_cron_expr, parse_cron_schedule,

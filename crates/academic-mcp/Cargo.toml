@@ -13,7 +13,7 @@ description = "Built-in Model Context Protocol (stdio and Streamable HTTP) serve
 workspace = true
 
 [dependencies]
-academic-core = { version = "0.2.0", path = "../academic-core" }
+academic-core = { version = "0.3.0", path = "../academic-core" }
 axum.workspace = true
 chrono.workspace = true
 serde.workspace = true

@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::error::Result;
 use crate::extract::Priority;
 use crate::parser::safe_join_within;
+use crate::store::{TaskRecord, TaskStatus};
 
 /// Generated `.ics` calendar file metadata and 1-click Google Calendar link.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,6 +241,43 @@ pub struct CalendarEventSpec<'a> {
     pub priority: Priority,
 }
 
+fn format_event_summary(course: &str, title: &str) -> String {
+    if course.trim().is_empty() {
+        title.trim().to_string()
+    } else {
+        format!("[{}] {}", course.trim(), title.trim())
+    }
+}
+
+fn priority_to_ics(priority: Priority) -> u8 {
+    match priority {
+        Priority::High => 1,
+        Priority::Medium => 5,
+        Priority::Low => 9,
+    }
+}
+
+fn append_dual_alarms(lines: &mut Vec<String>, summary: &str) {
+    lines.extend([
+        "BEGIN:VALARM".to_string(),
+        "TRIGGER:-P1D".to_string(),
+        "ACTION:DISPLAY".to_string(),
+        format!(
+            "DESCRIPTION:{}",
+            escape_ics(&format!("24h reminder: {summary}"))
+        ),
+        "END:VALARM".to_string(),
+        "BEGIN:VALARM".to_string(),
+        "TRIGGER:-PT1H".to_string(),
+        "ACTION:DISPLAY".to_string(),
+        format!(
+            "DESCRIPTION:{}",
+            escape_ics(&format!("1h reminder: {summary}"))
+        ),
+        "END:VALARM".to_string(),
+    ]);
+}
+
 /// Creates an RFC 5545 `.ics` file in `spec.calendar_dir` (with UTC timestamps and dual VALARM
 /// triggers `-P1D` and `-PT1H`) plus a matching Google Calendar 1-click URL.
 pub fn create_ics_event(spec: CalendarEventSpec<'_>) -> Result<CalendarArtifact> {
@@ -261,16 +299,8 @@ pub fn create_ics_event(spec: CalendarEventSpec<'_>) -> Result<CalendarArtifact>
     let now_utc = Utc::now();
 
     let uid = Uuid::new_v4().to_string();
-    let summary = if spec.course.trim().is_empty() {
-        spec.title.trim().to_string()
-    } else {
-        format!("[{}] {}", spec.course.trim(), spec.title.trim())
-    };
-    let prio_val = match spec.priority {
-        Priority::High => 1,
-        Priority::Medium => 5,
-        Priority::Low => 9,
-    };
+    let summary = format_event_summary(spec.course, spec.title);
+    let prio_val = priority_to_ics(spec.priority);
 
     let filename = format!(
         "{}_{}.ics",
@@ -279,7 +309,7 @@ pub fn create_ics_event(spec: CalendarEventSpec<'_>) -> Result<CalendarArtifact>
     );
     let file_path = safe_join_within(spec.calendar_dir, &filename)?;
 
-    let lines = [
+    let mut lines = vec![
         "BEGIN:VCALENDAR".to_string(),
         "VERSION:2.0".to_string(),
         "PRODID:-//luminariadev//academic-agent//EN".to_string(),
@@ -295,26 +325,13 @@ pub fn create_ics_event(spec: CalendarEventSpec<'_>) -> Result<CalendarArtifact>
         "CATEGORIES:ACADEMIC,ASSIGNMENT".to_string(),
         format!("PRIORITY:{prio_val}"),
         "STATUS:CONFIRMED".to_string(),
-        "BEGIN:VALARM".to_string(),
-        "TRIGGER:-P1D".to_string(),
-        "ACTION:DISPLAY".to_string(),
-        format!(
-            "DESCRIPTION:{}",
-            escape_ics(&format!("24h reminder: {summary}"))
-        ),
-        "END:VALARM".to_string(),
-        "BEGIN:VALARM".to_string(),
-        "TRIGGER:-PT1H".to_string(),
-        "ACTION:DISPLAY".to_string(),
-        format!(
-            "DESCRIPTION:{}",
-            escape_ics(&format!("1h reminder: {summary}"))
-        ),
-        "END:VALARM".to_string(),
+    ];
+    append_dual_alarms(&mut lines, &summary);
+    lines.extend([
         "END:VEVENT".to_string(),
         "END:VCALENDAR".to_string(),
         String::new(),
-    ];
+    ]);
 
     let ics_content = lines.join("\r\n");
     std::fs::write(&file_path, &ics_content)?;
@@ -337,6 +354,121 @@ pub fn create_ics_event(spec: CalendarEventSpec<'_>) -> Result<CalendarArtifact>
         ics_content,
         google_calendar_url,
     })
+}
+
+/// Filters tasks for iCalendar feed emission by completion state and optional case-insensitive
+/// course substring.
+pub fn filter_tasks_for_feed(
+    tasks: &[TaskRecord],
+    include_completed: bool,
+    course: Option<&str>,
+) -> Vec<TaskRecord> {
+    let needle = course
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_lowercase);
+    tasks
+        .iter()
+        .filter(|t| {
+            include_completed || !matches!(t.status, TaskStatus::Completed | TaskStatus::Archived)
+        })
+        .filter(|t| match needle.as_deref() {
+            Some(q) => t.course.to_lowercase().contains(q),
+            None => true,
+        })
+        .cloned()
+        .collect()
+}
+
+/// Builds a multi-event RFC 5545 iCalendar subscription feed from tracked tasks.
+/// Tasks without a resolvable deadline are skipped.
+pub fn generate_ics_feed(
+    tasks: &[TaskRecord],
+    tz: Tz,
+    default_duration_hours: u32,
+    calendar_name: &str,
+) -> String {
+    let cal_name = if calendar_name.trim().is_empty() {
+        "academic-agent Deadlines"
+    } else {
+        calendar_name.trim()
+    };
+    let duration_hours = i64::from(default_duration_hours.max(1));
+
+    let mut lines = vec![
+        "BEGIN:VCALENDAR".to_string(),
+        "VERSION:2.0".to_string(),
+        "PRODID:-//luminariadev//academic-agent//EN".to_string(),
+        "CALSCALE:GREGORIAN".to_string(),
+        "METHOD:PUBLISH".to_string(),
+        format!("X-WR-CALNAME:{}", escape_ics(cal_name)),
+        format!("X-WR-TIMEZONE:{}", tz.name()),
+        "REFRESH-INTERVAL;VALUE=DURATION:PT1H".to_string(),
+        "X-PUBLISHED-TTL:PT1H".to_string(),
+    ];
+
+    for task in tasks {
+        let Some(end_utc) = task.deadline_utc.or_else(|| {
+            task.deadline_raw
+                .as_deref()
+                .and_then(|raw| parse_deadline_in_tz(raw, tz))
+                .map(|dt| dt.with_timezone(&Utc))
+        }) else {
+            continue;
+        };
+
+        let start_utc = end_utc - Duration::hours(duration_hours);
+        let summary = format_event_summary(&task.course, &task.title);
+        let prio_val = priority_to_ics(task.priority);
+        let status = match task.status {
+            TaskStatus::Completed => "COMPLETED",
+            TaskStatus::Archived => "CANCELLED",
+            TaskStatus::Pending | TaskStatus::InProgress => "CONFIRMED",
+        };
+
+        let mut desc = task.summary.trim().to_string();
+        if !task.subtasks.is_empty() {
+            if !desc.is_empty() {
+                desc.push_str("\n\n");
+            }
+            desc.push_str("Subtasks:\n");
+            for (idx, sub) in task.subtasks.iter().enumerate() {
+                if idx > 0 {
+                    desc.push('\n');
+                }
+                desc.push_str("- ");
+                desc.push_str(sub.trim());
+            }
+        }
+        if !task.deliverables.is_empty() {
+            if !desc.is_empty() {
+                desc.push_str("\n\n");
+            }
+            desc.push_str("Deliverables: ");
+            desc.push_str(&task.deliverables.join(", "));
+        }
+
+        lines.extend([
+            "BEGIN:VEVENT".to_string(),
+            format!("UID:academic-task-{}@academic-agent.local", task.id),
+            format!("DTSTAMP:{}", task.updated_at.format("%Y%m%dT%H%M%SZ")),
+            format!("DTSTART:{}", start_utc.format("%Y%m%dT%H%M%SZ")),
+            format!("DTEND:{}", end_utc.format("%Y%m%dT%H%M%SZ")),
+            format!("SUMMARY:{}", escape_ics(&summary)),
+            format!("DESCRIPTION:{}", escape_ics(&desc)),
+            "CATEGORIES:ACADEMIC".to_string(),
+            format!("PRIORITY:{prio_val}"),
+            format!("STATUS:{status}"),
+        ]);
+        if !matches!(task.status, TaskStatus::Completed | TaskStatus::Archived) {
+            append_dual_alarms(&mut lines, &summary);
+        }
+        lines.push("END:VEVENT".to_string());
+    }
+
+    lines.push("END:VCALENDAR".to_string());
+    lines.push(String::new());
+    lines.join("\r\n")
 }
 
 #[cfg(test)]
@@ -401,5 +533,78 @@ mod tests {
                 .to_string(),
             "2026-11-25 09:00"
         );
+    }
+
+    #[test]
+    fn test_generate_ics_feed_stable_uids_status_and_escaping() {
+        use crate::extract::TaskKind;
+
+        let now = Utc::now();
+        let make_task = |id: u64,
+                         title: &str,
+                         deadline_raw: Option<&str>,
+                         status: TaskStatus,
+                         subtasks: Vec<&str>| TaskRecord {
+            id,
+            title: title.to_string(),
+            course: "Distributed, Systems".to_string(),
+            kind: TaskKind::Assignment,
+            deadline_raw: deadline_raw.map(str::to_string),
+            deadline_utc: deadline_raw
+                .and_then(|s| parse_deadline_in_tz(s, Jakarta))
+                .map(|dt| dt.with_timezone(&Utc)),
+            priority: Priority::High,
+            status,
+            estimated_hours: 3,
+            summary: "Implement Raft; log entries, replication".to_string(),
+            subtasks: subtasks.into_iter().map(str::to_string).collect(),
+            deliverables: vec!["PDF report".to_string(), "GitHub repo".to_string()],
+            ics_file: None,
+            google_calendar_url: None,
+            source_file: None,
+            content_hash: None,
+            extractor: "heuristic".to_string(),
+            snoozed_until: None,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let tasks = vec![
+            make_task(
+                1,
+                "Raft Lab",
+                Some("2026-12-10 23:59"),
+                TaskStatus::Pending,
+                vec!["Design RPC", "Run tests"],
+            ),
+            make_task(
+                2,
+                "Completed Essay",
+                Some("2026-12-01 18:00"),
+                TaskStatus::Completed,
+                vec![],
+            ),
+            make_task(3, "Undated Reading", None, TaskStatus::Pending, vec![]),
+        ];
+
+        let feed = generate_ics_feed(&tasks, Jakarta, 2, "academic-agent Deadlines");
+        assert!(feed.contains("\r\n"));
+        assert!(feed.ends_with("END:VCALENDAR\r\n"));
+        assert!(feed.contains("X-WR-CALNAME:academic-agent Deadlines"));
+        assert!(feed.contains("X-WR-TIMEZONE:Asia/Jakarta"));
+        assert!(feed.contains("REFRESH-INTERVAL;VALUE=DURATION:PT1H"));
+        assert!(feed.contains("UID:academic-task-1@academic-agent.local"));
+        assert!(feed.contains("DTSTART:20261210T145900Z"));
+        assert!(feed.contains("DTEND:20261210T165900Z"));
+        assert!(feed.contains("SUMMARY:[Distributed\\, Systems] Raft Lab"));
+        assert!(feed.contains("Implement Raft\\; log entries\\, replication"));
+        assert!(feed.contains("Subtasks:\\n- Design RPC\\n- Run tests"));
+        assert!(feed.contains("Deliverables: PDF report\\, GitHub repo"));
+        assert!(feed.contains("UID:academic-task-2@academic-agent.local"));
+        assert!(feed.contains("STATUS:COMPLETED"));
+        assert!(!feed.contains("academic-task-3@academic-agent.local"));
+
+        // Completed event (#2) must not carry VALARM entries; only open event (#1) has the 2 alarms
+        assert_eq!(feed.matches("BEGIN:VALARM").count(), 2);
     }
 }
