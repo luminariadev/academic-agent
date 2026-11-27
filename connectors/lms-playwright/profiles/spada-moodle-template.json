@@ -1,0 +1,19 @@
+{
+  "name": "spada-moodle-template",
+  "base_url": "https://spada.campus.ac.id",
+  "login_path": "/login/index.php",
+  "username_selector": "#username",
+  "password_selector": "#password",
+  "submit_selector": "#loginbtn",
+  "logged_in_selector": ".usermenu, #user-menu-toggle",
+  "dashboard_path": "/my/",
+  "course_paths": [
+    "/course/view.php?id=101"
+  ],
+  "item_selector": "li.activity.assign, li.activity.quiz",
+  "title_selector": ".instancename",
+  "course_selector": "h1, .page-header-headings h1",
+  "deadline_selector": ".description .text-muted, .activity-dates",
+  "summary_selector": ".activity-altcontent, .description",
+  "attachment_selector": "a[href*='pluginfile.php']"
+}

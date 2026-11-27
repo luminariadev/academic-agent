@@ -19,7 +19,7 @@ CONNECTOR_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = CONNECTOR_DIR.parent.parent
 sys.path.insert(0, str(CONNECTOR_DIR))
 
-from connector import sync_lms  # noqa: E402
+from connector import discover_profile, sync_lms  # noqa: E402
 from mock_lms import DEMO_PASS, DEMO_USER, start_mock_lms_in_thread  # noqa: E402
 
 
@@ -231,3 +231,23 @@ api_token = "{token}"
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+def test_playwright_discover_generates_valid_profile(tmp_path: Path):
+    lms_server, lms_url = start_mock_lms_in_thread()
+    out_path = tmp_path / "siakad-discovered.local.json"
+    try:
+        profile = discover_profile(
+            f"{lms_url}/login",
+            output_path=out_path,
+            headless=True,
+        )
+        assert out_path.is_file()
+        loaded = json.loads(out_path.read_text(encoding="utf-8"))
+        assert loaded["login_path"] == "/login"
+        assert loaded["username_selector"]
+        assert loaded["password_selector"]
+        assert loaded["submit_selector"]
+        assert loaded["item_selector"] == profile["item_selector"]
+    finally:
+        lms_server.shutdown()

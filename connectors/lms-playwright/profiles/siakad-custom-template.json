@@ -1,0 +1,20 @@
+{
+  "name": "siakad-custom-template",
+  "base_url": "https://siakad.campus.ac.id",
+  "login_path": "/login",
+  "username_selector": "input[name='nim'], input[name='username'], input[name='email']",
+  "password_selector": "input[name='password']",
+  "submit_selector": "button[type='submit'], input[type='submit']",
+  "logged_in_selector": ".user-info, .sidebar-menu, a[href*='logout']",
+  "dashboard_path": "/dashboard",
+  "course_paths": [
+    "/akademik/tugas",
+    "/kuliah/materi"
+  ],
+  "item_selector": ".card-tugas, .assignment-card, table.tugas tbody tr",
+  "title_selector": ".judul-tugas, .assignment-title, td:nth-child(2)",
+  "course_selector": ".nama-mk, .course-name, td:nth-child(1)",
+  "deadline_selector": ".batas-waktu, .deadline, td:nth-child(3)",
+  "summary_selector": ".deskripsi, .keterangan, .assignment-summary",
+  "attachment_selector": "a[href*='download'], a[href*='.pdf'], a[href*='.docx']"
+}

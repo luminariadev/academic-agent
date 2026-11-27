@@ -270,6 +270,93 @@ def sync_lms(
     return results
 
 
+def discover_profile(
+    url: str,
+    output_path: Optional[Path] = None,
+    headless: bool = True,
+) -> Dict[str, Any]:
+    """Inspects a campus LMS or custom SIAKAD login page and emits a starter selector manifest."""
+    parsed = urllib.parse.urlparse(url.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"Invalid LMS URL '{url}'; expected http:// or https://")
+
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+    login_path = parsed.path or "/login"
+    if parsed.query:
+        login_path = f"{login_path}?{parsed.query}"
+    host_slug = re.sub(r"[^a-z0-9]+", "-", (parsed.hostname or "campus").lower()).strip("-")
+
+    executable = resolve_chromium_executable()
+    launch_kwargs: Dict[str, Any] = {"headless": headless}
+    if executable:
+        launch_kwargs["executable_path"] = executable
+
+    detected: Dict[str, str] = {}
+    with sync_playwright() as p:
+        browser = p.chromium.launch(**launch_kwargs)
+        try:
+            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=20_000)
+            detected = page.evaluate(
+                """() => {
+                  const pick = (candidates) => {
+                    for (const sel of candidates) {
+                      if (document.querySelector(sel)) return sel;
+                    }
+                    return null;
+                  };
+                  const userSel = pick([
+                    "#username",
+                    "#pseudonym_session_unique_id",
+                    "input[name='nim']",
+                    "input[name='username']",
+                    "input[name='email']",
+                    "input[type='email']",
+                    "input[type='text']"
+                  ]) || "input[name='username']";
+                  const passSel = pick([
+                    "#password",
+                    "#pseudonym_session_password",
+                    "input[type='password']",
+                    "input[name='password']"
+                  ]) || "input[type='password']";
+                  const submitSel = pick([
+                    "#loginbtn",
+                    "button[type='submit']",
+                    "input[type='submit']",
+                    "form button"
+                  ]) || "button[type='submit']";
+                  return { userSel, passSel, submitSel, title: document.title || "" };
+                }"""
+            )
+        finally:
+            browser.close()
+
+    profile: Dict[str, Any] = {
+        "name": f"{host_slug}-discovered" if host_slug else "campus-discovered",
+        "base_url": base_url,
+        "login_path": login_path,
+        "username_selector": detected.get("userSel", "input[name='username']"),
+        "password_selector": detected.get("passSel", "input[type='password']"),
+        "submit_selector": detected.get("submitSel", "button[type='submit']"),
+        "logged_in_selector": ".usermenu, .user-profile, .user-info, a[href*='logout']",
+        "dashboard_path": "/dashboard",
+        "course_paths": ["/courses"],
+        "item_selector": ".assignment-card, .card-tugas, li.activity.assign, li.assignment, .course-assignment",
+        "title_selector": ".assignment-title, .judul-tugas, .instancename, a.ig-title, h3, h2",
+        "course_selector": ".course-name, .nama-mk, .course-title, h1",
+        "deadline_selector": ".due-date, .batas-waktu, .deadline, .assignment-date-due, .text-muted",
+        "summary_selector": ".assignment-summary, .deskripsi, .activity-altcontent, .description",
+        "attachment_selector": "a[href*='download'], a[href*='pluginfile.php'], a[href*='.pdf'], a[href*='.docx']",
+    }
+
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
+
+    return profile
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Playwright LMS connector for academic-agent")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -299,6 +386,18 @@ def main() -> None:
     p_demo.add_argument("--api-url", default="http://127.0.0.1:8080")
     p_demo.add_argument("--token", default=os.environ.get("ACADEMIC_API_TOKEN", ""))
     p_demo.add_argument("--dry-run", action="store_true")
+
+    p_discover = sub.add_parser(
+        "discover",
+        help="Inspect a campus LMS or SIAKAD login page and emit a starter selector profile JSON",
+    )
+    p_discover.add_argument("--url", required=True, help="Campus portal or login URL")
+    p_discover.add_argument(
+        "--output",
+        type=Path,
+        help="Optional output path (for example profiles/my-campus.local.json)",
+    )
+    p_discover.add_argument("--headed", action="store_true")
 
     args = parser.parse_args()
 
@@ -363,6 +462,15 @@ def main() -> None:
             print(json.dumps(out, indent=2, default=str))
         finally:
             server.shutdown()
+        return
+
+    if args.cmd == "discover":
+        out = discover_profile(
+            url=args.url,
+            output_path=args.output,
+            headless=not args.headed,
+        )
+        print(json.dumps(out, indent=2))
 
 
 if __name__ == "__main__":

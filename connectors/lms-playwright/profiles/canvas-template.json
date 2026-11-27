@@ -1,0 +1,19 @@
+{
+  "name": "canvas-template",
+  "base_url": "https://canvas.example.edu",
+  "login_path": "/login/canvas",
+  "username_selector": "#pseudonym_session_unique_id",
+  "password_selector": "#pseudonym_session_password",
+  "submit_selector": "button[type='submit']",
+  "logged_in_selector": "#global_nav_profile_link",
+  "dashboard_path": "/",
+  "course_paths": [
+    "/courses/101/assignments"
+  ],
+  "item_selector": "li.assignment",
+  "title_selector": "a.ig-title",
+  "course_selector": "#breadcrumbs li:nth-child(2) a",
+  "deadline_selector": ".assignment-date-due",
+  "summary_selector": ".description",
+  "attachment_selector": "a.instructure_file_link"
+}
