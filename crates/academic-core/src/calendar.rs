@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -96,10 +97,13 @@ pub fn parse_deadline_in_tz(raw: &str, tz: Tz) -> Option<DateTime<Tz>> {
     }
 
     // Try Indonesian or day-first month names: "15 Juli 2026" / "15 Juli 2026 23:59"
-    let dmy_re = Regex::new(
-        r"(?i)\b(\d{1,2})\s+([A-Za-z]+)\s+(20\d{2})(?:[\s,]+(?:pukul\s+|at\s+)?(\d{1,2}[:.]\d{2}))?",
-    )
-    .expect("valid dmy month regex");
+    static DMY_RE: OnceLock<Regex> = OnceLock::new();
+    let dmy_re = DMY_RE.get_or_init(|| {
+        Regex::new(
+            r"(?i)\b(\d{1,2})\s+([A-Za-z]+)\s+(20\d{2})(?:[\s,]+(?:pukul\s+|at\s+)?(\d{1,2}[:.]\d{2}))?",
+        )
+        .expect("valid dmy month regex")
+    });
     if let Some(caps) = dmy_re.captures(cleaned) {
         let day: u32 = caps[1].parse().ok()?;
         let month = month_number_from_name(&caps[2])?;
@@ -114,10 +118,13 @@ pub fn parse_deadline_in_tz(raw: &str, tz: Tz) -> Option<DateTime<Tz>> {
     }
 
     // Try English month-first dates: "July 15, 2026" / "Dec 15 2026 18:00"
-    let mdy_re = Regex::new(
-        r"(?i)\b([A-Za-z]+)\s+(\d{1,2}),?\s+(20\d{2})(?:[\s,]+(?:at\s+)?(\d{1,2}[:.]\d{2}))?",
-    )
-    .expect("valid mdy month regex");
+    static MDY_RE: OnceLock<Regex> = OnceLock::new();
+    let mdy_re = MDY_RE.get_or_init(|| {
+        Regex::new(
+            r"(?i)\b([A-Za-z]+)\s+(\d{1,2}),?\s+(20\d{2})(?:[\s,]+(?:at\s+)?(\d{1,2}[:.]\d{2}))?",
+        )
+        .expect("valid mdy month regex")
+    });
     if let Some(caps) = mdy_re.captures(cleaned) {
         let month = month_number_from_name(&caps[1])?;
         let day: u32 = caps[2].parse().ok()?;
@@ -132,8 +139,10 @@ pub fn parse_deadline_in_tz(raw: &str, tz: Tz) -> Option<DateTime<Tz>> {
     }
 
     // Fallback regex anywhere inside longer strings
-    let iso_re =
-        Regex::new(r"(20\d{2}-\d{2}-\d{2})(?:[ T](\d{1,2}[:.]\d{2}))?").expect("valid iso regex");
+    static ISO_RE: OnceLock<Regex> = OnceLock::new();
+    let iso_re = ISO_RE.get_or_init(|| {
+        Regex::new(r"(20\d{2}-\d{2}-\d{2})(?:[ T](\d{1,2}[:.]\d{2}))?").expect("valid iso regex")
+    });
     if let Some(caps) = iso_re.captures(cleaned) {
         if let Ok(date) = NaiveDate::parse_from_str(&caps[1], "%Y-%m-%d") {
             let time = parse_time_hint(caps.get(2).map(|m| m.as_str()));
@@ -558,6 +567,7 @@ mod tests {
             estimated_hours: 3,
             summary: "Implement Raft; log entries, replication".to_string(),
             subtasks: subtasks.into_iter().map(str::to_string).collect(),
+            subtasks_done: Vec::new(),
             deliverables: vec!["PDF report".to_string(), "GitHub repo".to_string()],
             ics_file: None,
             google_calendar_url: None,

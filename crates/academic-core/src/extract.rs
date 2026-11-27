@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use chrono_tz::Tz;
@@ -125,14 +126,21 @@ Return ONLY valid raw JSON (no markdown fences, no commentary) with this schema:
 }
 If only a date is present without a time, default time to 23:59."#;
 
+fn cached_regex(slot: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
+    slot.get_or_init(|| Regex::new(pattern).expect("valid static regex"))
+}
+
 /// Strips optional markdown code blocks and parses the outermost JSON object from LLM text.
 pub fn parse_llm_json(raw_text: &str) -> Option<serde_json::Value> {
+    static FENCE_START: OnceLock<Regex> = OnceLock::new();
+    static FENCE_END: OnceLock<Regex> = OnceLock::new();
+
     let trimmed = raw_text.trim();
     if trimmed.is_empty() {
         return None;
     }
-    let fence_start = Regex::new(r"^```(?:json)?\s*").ok()?;
-    let fence_end = Regex::new(r"\s*```$").ok()?;
+    let fence_start = cached_regex(&FENCE_START, r"^```(?:json)?\s*");
+    let fence_end = cached_regex(&FENCE_END, r"\s*```$");
     let mut cleaned = fence_start.replace(trimmed, "").into_owned();
     cleaned = fence_end.replace(&cleaned, "").into_owned();
 
@@ -179,8 +187,16 @@ fn clean_title_from_filename(filename: &str) -> String {
 }
 
 fn find_deadline_candidate(text: &str, tz: Tz) -> Option<String> {
+    static ISO_RE: OnceLock<Regex> = OnceLock::new();
+    static SLASH_RE: OnceLock<Regex> = OnceLock::new();
+    static DMY_MONTH_RE: OnceLock<Regex> = OnceLock::new();
+    static MDY_MONTH_RE: OnceLock<Regex> = OnceLock::new();
+
     // 1. ISO date/time patterns
-    let iso_re = Regex::new(r"(20\d{2}-\d{2}-\d{2}(?:[ T]\d{1,2}[:.]\d{2}(?::\d{2})?)?)").ok()?;
+    let iso_re = cached_regex(
+        &ISO_RE,
+        r"(20\d{2}-\d{2}-\d{2}(?:[ T]\d{1,2}[:.]\d{2}(?::\d{2})?)?)",
+    );
     if let Some(m) = iso_re.find(text) {
         if let Some(dt) = parse_deadline_in_tz(m.as_str(), tz) {
             return Some(dt.format("%Y-%m-%d %H:%M").to_string());
@@ -188,7 +204,10 @@ fn find_deadline_candidate(text: &str, tz: Tz) -> Option<String> {
     }
 
     // 2. DD/MM/YYYY or DD-MM-YYYY patterns
-    let slash_re = Regex::new(r"(\d{1,2}[/-]\d{1,2}[/-]20\d{2}(?:\s+\d{1,2}[:.]\d{2})?)").ok()?;
+    let slash_re = cached_regex(
+        &SLASH_RE,
+        r"(\d{1,2}[/-]\d{1,2}[/-]20\d{2}(?:\s+\d{1,2}[:.]\d{2})?)",
+    );
     if let Some(m) = slash_re.find(text) {
         if let Some(dt) = parse_deadline_in_tz(m.as_str(), tz) {
             return Some(dt.format("%Y-%m-%d %H:%M").to_string());
@@ -196,10 +215,10 @@ fn find_deadline_candidate(text: &str, tz: Tz) -> Option<String> {
     }
 
     // 3. Indonesian / day-first month names: 15 Juli 2026 [18:00]
-    let dmy_month = Regex::new(
+    let dmy_month = cached_regex(
+        &DMY_MONTH_RE,
         r"(?i)\b\d{1,2}\s+(?:Januari|January|Jan|Februari|February|Feb|Maret|March|Mar|April|Apr|Mei|May|Juni|June|Jun|Juli|July|Jul|Agustus|August|Agu|Ags|Aug|September|Sep|Sept|Oktober|October|Okt|Oct|November|Nov|Desember|December|Des|Dec)\s+20\d{2}(?:[\s,]+(?:pukul\s+|at\s+)?\d{1,2}[:.]\d{2})?",
-    )
-    .ok()?;
+    );
     if let Some(m) = dmy_month.find(text) {
         if let Some(dt) = parse_deadline_in_tz(m.as_str(), tz) {
             return Some(dt.format("%Y-%m-%d %H:%M").to_string());
@@ -207,10 +226,10 @@ fn find_deadline_candidate(text: &str, tz: Tz) -> Option<String> {
     }
 
     // 4. English month-first names: July 15, 2026 [18:00]
-    let mdy_month = Regex::new(
+    let mdy_month = cached_regex(
+        &MDY_MONTH_RE,
         r"(?i)\b(?:January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sep|Sept|October|Oct|November|Nov|December|Dec)\s+\d{1,2},?\s+20\d{2}(?:[\s,]+(?:at\s+)?\d{1,2}[:.]\d{2})?",
-    )
-    .ok()?;
+    );
     if let Some(m) = mdy_month.find(text) {
         if let Some(dt) = parse_deadline_in_tz(m.as_str(), tz) {
             return Some(dt.format("%Y-%m-%d %H:%M").to_string());
@@ -223,21 +242,32 @@ fn find_deadline_candidate(text: &str, tz: Tz) -> Option<String> {
 /// Deterministic bilingual (Indonesian + English) heuristic extractor used when offline
 /// or when LLM inference fails.
 pub fn heuristic_extract(text: &str, filename: &str, tz: Tz) -> TaskExtraction {
+    static ACADEMIC_RE: OnceLock<Regex> = OnceLock::new();
+    static EXAM_RE: OnceLock<Regex> = OnceLock::new();
+    static QUIZ_RE: OnceLock<Regex> = OnceLock::new();
+    static ASSIGN_RE: OnceLock<Regex> = OnceLock::new();
+    static SYLLABUS_RE: OnceLock<Regex> = OnceLock::new();
+    static ANNOUNCE_RE: OnceLock<Regex> = OnceLock::new();
+    static COURSE_RE: OnceLock<Regex> = OnceLock::new();
+    static TITLE_RE: OnceLock<Regex> = OnceLock::new();
+
     let lowered = text.to_lowercase();
 
-    let academic_re = Regex::new(
+    let academic_re = cached_regex(
+        &ACADEMIC_RE,
         r"(?i)\b(?:tugas|deadline|pengumpulan|silabus|mata\s+kuliah|dosen|ujian|uts|uas|kuis|quiz|exam|assignment|syllabus|course|lecturer|homework|project|proyek|laporan|report|submission|due|kuliah|lab)\b",
-    )
-    .expect("valid academic keyword regex");
-    let exam_re = Regex::new(r"(?i)\b(?:ujian|exam|uts|uas)\b").expect("valid exam regex");
-    let quiz_re = Regex::new(r"(?i)\b(?:kuis|quiz)\b").expect("valid quiz regex");
-    let assign_re =
-        Regex::new(r"(?i)\b(?:tugas|assignment|homework|deadline|due|proyek|project|lab)\b")
-            .expect("valid assignment regex");
-    let syllabus_re =
-        Regex::new(r"(?i)\b(?:silabus|syllabus|rps)\b").expect("valid syllabus regex");
-    let announce_re = Regex::new(r"(?i)\b(?:pengumuman|announcement|jadwal|schedule)\b")
-        .expect("valid announcement regex");
+    );
+    let exam_re = cached_regex(&EXAM_RE, r"(?i)\b(?:ujian|exam|uts|uas)\b");
+    let quiz_re = cached_regex(&QUIZ_RE, r"(?i)\b(?:kuis|quiz)\b");
+    let assign_re = cached_regex(
+        &ASSIGN_RE,
+        r"(?i)\b(?:tugas|assignment|homework|deadline|due|proyek|project|lab)\b",
+    );
+    let syllabus_re = cached_regex(&SYLLABUS_RE, r"(?i)\b(?:silabus|syllabus|rps)\b");
+    let announce_re = cached_regex(
+        &ANNOUNCE_RE,
+        r"(?i)\b(?:pengumuman|announcement|jadwal|schedule)\b",
+    );
 
     let is_academic = academic_re.is_match(text);
 
@@ -255,9 +285,10 @@ pub fn heuristic_extract(text: &str, filename: &str, tz: Tz) -> TaskExtraction {
         (TaskKind::General, Priority::Medium, 2)
     };
 
-    let course_re =
-        Regex::new(r"(?im)^(?:mata\s+kuliah|matakuliah|course|mk)\s*[:=\-]\s*([^\r\n]+)")
-            .expect("valid course regex");
+    let course_re = cached_regex(
+        &COURSE_RE,
+        r"(?im)^(?:mata\s+kuliah|matakuliah|course|mk)\s*[:=\-]\s*([^\r\n]+)",
+    );
     let course = if let Some(caps) = course_re.captures(text) {
         caps[1].trim().to_string()
     } else {
@@ -282,10 +313,10 @@ pub fn heuristic_extract(text: &str, filename: &str, tz: Tz) -> TaskExtraction {
             .unwrap_or_else(|| "General Course".to_string())
     };
 
-    let title_re = Regex::new(
+    let title_re = cached_regex(
+        &TITLE_RE,
         r"(?im)^(?:judul|title|topik|topic|tugas|assignment|subject)\s*[:=\-]\s*([^\r\n]+)",
-    )
-    .expect("valid title regex");
+    );
     let title = if let Some(caps) = title_re.captures(text) {
         caps[1].trim().to_string()
     } else if !filename.trim().is_empty() {

@@ -84,3 +84,9 @@ impl From<redb::CommitError> for Error {
         Self::Storage(err.to_string())
     }
 }
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Http(err.to_string())
+    }
+}

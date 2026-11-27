@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::OnceLock;
 
 use chrono_tz::Tz;
 use cron::Schedule;
@@ -21,6 +22,7 @@ pub struct Config {
     pub cron: CronConfig,
     pub server: ServerConfig,
     pub n8n: N8nConfig,
+    pub lms: LmsConfig,
 }
 
 /// Filesystem paths and general behavior settings.
@@ -215,6 +217,88 @@ impl Default for N8nConfig {
     }
 }
 
+/// Supported native LMS integration sources.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LmsSourceKind {
+    #[default]
+    IcsFeed,
+    MoodleApi,
+    CanvasApi,
+}
+
+impl LmsSourceKind {
+    pub fn parse_loose(raw: &str) -> Result<Self> {
+        match raw.trim().to_lowercase().as_str() {
+            "ics" | "ics_feed" | "ical" | "feed" => Ok(Self::IcsFeed),
+            "moodle" | "moodle_api" => Ok(Self::MoodleApi),
+            "canvas" | "canvas_api" => Ok(Self::CanvasApi),
+            other => Err(Error::Config(format!(
+                "invalid LMS source kind '{other}'; expected ics_feed, moodle_api, or canvas_api"
+            ))),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::IcsFeed => "ics_feed",
+            Self::MoodleApi => "moodle_api",
+            Self::CanvasApi => "canvas_api",
+        }
+    }
+}
+
+/// Configured campus LMS feed or API endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LmsSourceConfig {
+    pub name: String,
+    pub kind: LmsSourceKind,
+    pub url: String,
+    pub token: String,
+    pub default_course: String,
+    #[serde(default = "default_true_bool")]
+    pub enabled: bool,
+}
+
+impl Default for LmsSourceConfig {
+    fn default() -> Self {
+        Self {
+            name: "campus-lms".to_string(),
+            kind: LmsSourceKind::IcsFeed,
+            url: String::new(),
+            token: String::new(),
+            default_course: "Campus LMS".to_string(),
+            enabled: true,
+        }
+    }
+}
+
+/// Automatic LMS calendar/API synchronization settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LmsConfig {
+    pub enabled: bool,
+    pub sync_interval_secs: u64,
+    pub notify_on_sync: bool,
+    pub sources: Vec<LmsSourceConfig>,
+}
+
+impl Default for LmsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            sync_interval_secs: 900,
+            notify_on_sync: true,
+            sources: Vec::new(),
+        }
+    }
+}
+
+fn default_true_bool() -> bool {
+    true
+}
+
 /// Loads `KEY=VALUE` entries from a `.env` file into the current process environment
 /// without overwriting variables that are already set.
 pub fn load_dotenv_if_present(path: &Path) -> Result<usize> {
@@ -256,7 +340,9 @@ pub fn expand_env_vars_with<F>(input: &str, mut lookup: F) -> String
 where
     F: FnMut(&str) -> Option<String>,
 {
-    let re = Regex::new(r"\$\{([A-Za-z0-9_]+)\}").expect("valid env placeholder regex");
+    static ENV_RE: OnceLock<Regex> = OnceLock::new();
+    let re = ENV_RE
+        .get_or_init(|| Regex::new(r"\$\{([A-Za-z0-9_]+)\}").expect("valid env placeholder regex"));
     re.replace_all(input, |caps: &regex::Captures<'_>| {
         let name = &caps[1];
         if let Some(val) = lookup(name) {
@@ -367,6 +453,13 @@ impl Config {
 
         self.n8n.webhook_url = expand_env_vars_with(&self.n8n.webhook_url, &mut lookup);
         self.n8n.secret = expand_env_vars_with(&self.n8n.secret, &mut lookup);
+
+        for src in &mut self.lms.sources {
+            src.name = expand_env_vars_with(&src.name, &mut lookup);
+            src.url = expand_env_vars_with(&src.url, &mut lookup);
+            src.token = expand_env_vars_with(&src.token, &mut lookup);
+            src.default_course = expand_env_vars_with(&src.default_course, &mut lookup);
+        }
     }
 
     /// Expands placeholders using `std::env::var`.
@@ -428,6 +521,16 @@ impl Config {
             return Err(Error::Config(
                 "server.max_upload_bytes must be greater than 0".to_string(),
             ));
+        }
+        if self.lms.sync_interval_secs == 0 {
+            return Err(Error::Config(
+                "lms.sync_interval_secs must be greater than 0".to_string(),
+            ));
+        }
+        for (idx, src) in self.lms.sources.iter().enumerate() {
+            if src.enabled {
+                validate_optional_http_url(&format!("lms.sources[{idx}].url"), &src.url)?;
+            }
         }
         Ok(())
     }
@@ -519,6 +622,20 @@ enabled = false
 webhook_url = "${N8N_WEBHOOK_URL}"
 secret = "${N8N_WEBHOOK_SECRET}"
 timeout_secs = 10
+
+# Optional native LMS calendar / API synchronization (Moodle, Canvas, Google Classroom)
+[lms]
+enabled = false
+sync_interval_secs = 900
+notify_on_sync = true
+
+# Example: paste your campus LMS exported .ics calendar URL or configure REST API
+# [[lms.sources]]
+# name = "campus-ics"
+# kind = "ics_feed"
+# url = "${ACADEMIC_LMS_ICS_URL}"
+# default_course = "Campus LMS"
+# enabled = true
 "#
         .to_string()
     }
@@ -531,6 +648,38 @@ fn redact_field(val: &mut String) {
     }
 }
 
+/// Redacts query strings in URLs that carry authentication tokens or secrets (`token`, `authtoken`,
+/// `wstoken`, `key`, `secret`, `password`, `auth`) while preserving non-sensitive URLs.
+pub fn redact_url_secrets(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || (trimmed.starts_with("${") && trimmed.ends_with('}')) {
+        return raw.to_string();
+    }
+    let Some((base, query)) = trimmed.split_once('?') else {
+        return raw.to_string();
+    };
+    let has_sensitive_key = query.split('&').any(|pair| {
+        let key = pair.split('=').next().unwrap_or("").trim().to_lowercase();
+        !key.is_empty()
+            && [
+                "token",
+                "authtoken",
+                "wstoken",
+                "key",
+                "secret",
+                "password",
+                "auth",
+            ]
+            .iter()
+            .any(|s| key.contains(s))
+    });
+    if has_sensitive_key {
+        format!("{base}?<redacted>")
+    } else {
+        raw.to_string()
+    }
+}
+
 /// Serializes `Config` to TOML after redacting literal secrets while preserving `${VAR}` placeholders.
 pub fn redact_config_toml(config: &Config) -> Result<String> {
     let mut cloned = config.clone();
@@ -540,6 +689,10 @@ pub fn redact_config_toml(config: &Config) -> Result<String> {
     redact_field(&mut cloned.server.api_token);
     redact_field(&mut cloned.server.webdelta_webhook_secret);
     redact_field(&mut cloned.n8n.secret);
+    for src in &mut cloned.lms.sources {
+        redact_field(&mut src.token);
+        src.url = redact_url_secrets(&src.url);
+    }
     Ok(toml::to_string_pretty(&cloned)?)
 }
 
@@ -567,6 +720,26 @@ mod tests {
         assert!(!redacted.contains("secret-bot-token"));
         assert!(redacted.contains("<redacted>"));
         assert!(redacted.contains("${ACADEMIC_API_TOKEN}"));
+    }
+
+    #[test]
+    fn test_redact_lms_url_and_token() {
+        let mut cfg = Config::default();
+        cfg.lms.enabled = true;
+        cfg.lms.sources.push(LmsSourceConfig {
+            name: "moodle-feed".to_string(),
+            kind: LmsSourceKind::IcsFeed,
+            url: "https://lms.campus.ac.id/calendar/export_execute.php?userid=42&authtoken=supersecret123".to_string(),
+            token: "moodle-ws-token-xyz".to_string(),
+            default_course: "Campus LMS".to_string(),
+            enabled: true,
+        });
+        let redacted = redact_config_toml(&cfg).expect("redacts LMS config");
+        assert!(!redacted.contains("supersecret123"));
+        assert!(!redacted.contains("moodle-ws-token-xyz"));
+        assert!(
+            redacted.contains("https://lms.campus.ac.id/calendar/export_execute.php?<redacted>")
+        );
     }
 
     #[test]
