@@ -202,6 +202,7 @@
       <button id="open-upload-btn" class="primary">Upload Document</button>
       <button id="open-add-btn">Add Task</button>
       <button id="cron-btn">Cron Tick</button>
+      <button id="feed-btn">Calendar Feed</button>
       <button id="export-json-btn">Export JSON</button>
       <button id="export-csv-btn">Export CSV</button>
       <button id="refresh-btn">Refresh</button>
@@ -595,6 +596,22 @@
     document.getElementById("priority-filter").addEventListener("change", renderTable);
     document.getElementById("refresh-btn").addEventListener("click", loadTasks);
     document.getElementById("cron-btn").addEventListener("click", runCronTick);
+    document.getElementById("feed-btn").addEventListener("click", async () => {
+      const token = sessionStorage.getItem("academic_token") || "";
+      const feedUrl = token
+        ? `${window.location.origin}/api/calendar/feed.ics?token=${encodeURIComponent(token)}`
+        : `${window.location.origin}/api/calendar/feed.ics`;
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(feedUrl);
+          copied = true;
+        }
+      } catch {}
+      showNotice(copied
+        ? `Copied iCalendar feed URL to clipboard: ${feedUrl}`
+        : `iCalendar subscription URL: ${feedUrl}`);
+    });
     document.getElementById("export-json-btn").addEventListener("click", () => exportTasks("json"));
     document.getElementById("export-csv-btn").addEventListener("click", () => exportTasks("csv"));
     document.getElementById("theme-btn").addEventListener("click", () => {

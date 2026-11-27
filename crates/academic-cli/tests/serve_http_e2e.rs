@@ -216,4 +216,42 @@ async fn test_serve_security_upload_webdelta_hmac_and_mcp_http() {
     assert_eq!(cron_ok.status().as_u16(), 200);
     let cron_json: Value = cron_ok.json().await.unwrap();
     assert_eq!(cron_json["dry_run"], true);
+
+    // 8. Live iCalendar subscription feed requires auth and filters cleanly
+    let feed_unauth = client
+        .get(format!("{base}/api/calendar/feed.ics"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(feed_unauth.status().as_u16(), 401);
+
+    let feed_ok = client
+        .get(format!("{base}/api/calendar/feed.ics?token={token}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(feed_ok.status().as_u16(), 200);
+    let content_type = feed_ok
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(content_type.contains("text/calendar"));
+    let feed_text = feed_ok.text().await.unwrap();
+    assert!(feed_text.contains("BEGIN:VCALENDAR"));
+    assert!(feed_text.contains("X-WR-CALNAME:academic-agent Deadlines"));
+    assert!(feed_text.contains("Architecture RFC"));
+    assert!(feed_text.contains("Campus Notice Board"));
+
+    let feed_filtered = client
+        .get(format!(
+            "{base}/api/calendar/feed.ics?token={token}&course=Software"
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(feed_filtered.status().as_u16(), 200);
+    let filtered_text = feed_filtered.text().await.unwrap();
+    assert!(filtered_text.contains("Architecture RFC"));
+    assert!(!filtered_text.contains("Campus Notice Board"));
 }

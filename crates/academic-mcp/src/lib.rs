@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use academic_core::calendar::{create_ics_event, parse_deadline_in_tz, CalendarEventSpec};
+use academic_core::calendar::{
+    create_ics_event, filter_tasks_for_feed, generate_ics_feed, parse_deadline_in_tz,
+    CalendarEventSpec,
+};
 use academic_core::config::{redact_config_toml, Config};
 use academic_core::error::{Error, Result};
 use academic_core::extract::{Priority, TaskKind};
@@ -440,6 +443,22 @@ impl McpServer {
                     format!("# {}\n{}", self.config_path.display(), toml),
                 )
             }
+            "academic://calendar/feed" => {
+                let tasks = self
+                    .store
+                    .list_tasks(None)
+                    .map_err(|e| (-32603, e.to_string()))?;
+                let open_tasks = filter_tasks_for_feed(&tasks, false, None);
+                let cfg = self.config.read().await.clone();
+                let tz = cfg.timezone_tz().map_err(|e| (-32603, e.to_string()))?;
+                let feed = generate_ics_feed(
+                    &open_tasks,
+                    tz,
+                    cfg.general.default_duration_hours,
+                    "academic-agent Deadlines",
+                );
+                ("text/calendar", feed)
+            }
             other if other.starts_with("academic://calendar/") => {
                 let id_str = other.trim_start_matches("academic://calendar/").trim();
                 let task_id: u64 = id_str.parse().map_err(|_| {
@@ -663,6 +682,12 @@ fn static_resource_definitions() -> Vec<Value> {
             "description": "Active academic-agent.toml with literal secrets redacted.",
             "mimeType": "text/plain"
         }),
+        json!({
+            "uri": "academic://calendar/feed",
+            "name": "Live iCalendar Feed",
+            "description": "RFC 5545 .ics calendar feed of all open academic tasks with deadlines.",
+            "mimeType": "text/calendar"
+        }),
     ]
 }
 
@@ -682,6 +707,18 @@ pub struct McpHttpState {
     pub token: Option<String>,
 }
 
+/// Performs constant-time byte comparison between two secret strings.
+pub fn constant_time_secret_eq(provided: &str, expected: &str) -> bool {
+    if provided.len() != expected.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (a, b) in provided.as_bytes().iter().zip(expected.as_bytes().iter()) {
+        diff |= a ^ b;
+    }
+    diff == 0
+}
+
 /// Checks `Authorization: Bearer <token>` using constant-time byte equality when expected token is set.
 pub fn is_bearer_authorized(headers: &HeaderMap, expected: Option<&str>) -> bool {
     let Some(secret) = expected.map(str::trim).filter(|s| !s.is_empty()) else {
@@ -693,14 +730,7 @@ pub fn is_bearer_authorized(headers: &HeaderMap, expected: Option<&str>) -> bool
     let Some(provided) = raw.trim().strip_prefix("Bearer ").map(str::trim) else {
         return false;
     };
-    if provided.len() != secret.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (a, b) in provided.as_bytes().iter().zip(secret.as_bytes().iter()) {
-        diff |= a ^ b;
-    }
-    diff == 0
+    constant_time_secret_eq(provided, secret)
 }
 
 async fn http_mcp_handler(
@@ -814,9 +844,15 @@ mod tests {
                 .unwrap();
         assert_eq!(scanned_body["task"]["course"], "Databases");
 
+        let res_list = srv
+            .handle_message(r#"{"jsonrpc":"2.0","id":5,"method":"resources/list"}"#)
+            .await
+            .unwrap();
+        assert_eq!(res_list["result"]["resources"].as_array().unwrap().len(), 4);
+
         let cfg_res = srv
             .handle_message(
-                r#"{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"academic://config"}}"#,
+                r#"{"jsonrpc":"2.0","id":6,"method":"resources/read","params":{"uri":"academic://config"}}"#,
             )
             .await
             .unwrap();
@@ -826,12 +862,23 @@ mod tests {
 
         let ics_res = srv
             .handle_message(
-                r#"{"jsonrpc":"2.0","id":6,"method":"resources/read","params":{"uri":"academic://calendar/1"}}"#,
+                r#"{"jsonrpc":"2.0","id":7,"method":"resources/read","params":{"uri":"academic://calendar/1"}}"#,
             )
             .await
             .unwrap();
         let ics_text = ics_res["result"]["contents"][0]["text"].as_str().unwrap();
         assert!(ics_text.contains("BEGIN:VCALENDAR"));
         assert!(ics_text.contains("Compiler Design Homework"));
+
+        let feed_res = srv
+            .handle_message(
+                r#"{"jsonrpc":"2.0","id":8,"method":"resources/read","params":{"uri":"academic://calendar/feed"}}"#,
+            )
+            .await
+            .unwrap();
+        let feed_text = feed_res["result"]["contents"][0]["text"].as_str().unwrap();
+        assert!(feed_text.contains("BEGIN:VCALENDAR"));
+        assert!(feed_text.contains("X-WR-CALNAME:academic-agent Deadlines"));
+        assert!(feed_text.contains("UID:academic-task-1@academic-agent.local"));
     }
 }

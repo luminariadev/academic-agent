@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use academic_core::calendar::{create_ics_event, parse_deadline_in_tz, CalendarEventSpec};
+use academic_core::calendar::{
+    create_ics_event, filter_tasks_for_feed, generate_ics_feed, parse_deadline_in_tz,
+    CalendarEventSpec,
+};
 use academic_core::config::Config;
 use academic_core::cron_engine::run_cron_tick;
 use academic_core::discord_bot::run_discord_gateway;
@@ -13,7 +16,9 @@ use academic_core::notify::dispatch_new_task;
 use academic_core::parser::{safe_join_within, sanitize_filename, sha256_hex};
 use academic_core::pipeline::{verify_hmac_sha256, AcademicPipeline, WebdeltaWebhookPayload};
 use academic_core::store::{ExportFormat, InsertOutcome, NewTask, TaskStatus, TaskStore};
-use academic_mcp::{is_bearer_authorized, mcp_route, McpHttpState, McpServer};
+use academic_mcp::{
+    constant_time_secret_eq, is_bearer_authorized, mcp_route, McpHttpState, McpServer,
+};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, Path as AxumPath, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
@@ -82,6 +87,24 @@ fn require_bearer(state: &AppState, headers: &HeaderMap) -> std::result::Result<
             "Unauthorized: invalid or missing bearer token".to_string(),
         ))
     }
+}
+
+fn require_bearer_or_query_token(
+    state: &AppState,
+    headers: &HeaderMap,
+    query_token: Option<&str>,
+) -> std::result::Result<(), ApiError> {
+    if is_bearer_authorized(headers, state.api_token.as_deref()) {
+        return Ok(());
+    }
+    if let (Some(expected), Some(provided)) = (state.api_token.as_deref(), query_token) {
+        if constant_time_secret_eq(provided.trim(), expected.trim()) {
+            return Ok(());
+        }
+    }
+    Err(ApiError::Unauthorized(
+        "Unauthorized: invalid or missing token".to_string(),
+    ))
 }
 
 fn build_cors_headers(state: &AppState, req_headers: &HeaderMap) -> HeaderMap {
@@ -538,6 +561,43 @@ async fn cron_tick_handler(
     ))
 }
 
+#[derive(Deserialize)]
+struct CalendarFeedQuery {
+    token: Option<String>,
+    include_completed: Option<bool>,
+    course: Option<String>,
+}
+
+async fn calendar_feed_handler(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<CalendarFeedQuery>,
+) -> std::result::Result<Response, ApiError> {
+    require_bearer_or_query_token(&state, &headers, query.token.as_deref())?;
+    let include_completed = query.include_completed.unwrap_or(false);
+    let tasks = state.store.list_tasks(None)?;
+    let filtered = filter_tasks_for_feed(&tasks, include_completed, query.course.as_deref());
+    let tz = state.config.timezone_tz()?;
+    let feed = generate_ics_feed(
+        &filtered,
+        tz,
+        state.config.general.default_duration_hours,
+        "academic-agent Deadlines",
+    );
+    Ok((
+        [
+            (header::CONTENT_TYPE, "text/calendar; charset=utf-8"),
+            (
+                header::CONTENT_DISPOSITION,
+                "inline; filename=\"academic-agent-feed.ics\"",
+            ),
+            (header::CACHE_CONTROL, "no-cache, max-age=300"),
+        ],
+        feed,
+    )
+        .into_response())
+}
+
 async fn download_calendar_handler(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -633,6 +693,7 @@ pub fn build_app_router(
         .route("/api/webhooks/webdelta", post(webdelta_webhook_handler))
         .route("/api/digest", post(digest_handler))
         .route("/api/cron-tick", post(cron_tick_handler))
+        .route("/api/calendar/feed.ics", get(calendar_feed_handler))
         .route("/api/calendar/{filename}", get(download_calendar_handler))
         .layer(DefaultBodyLimit::max(max_body))
         .with_state(app_state)

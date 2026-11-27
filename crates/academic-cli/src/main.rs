@@ -9,7 +9,9 @@ use academic_core::discord_bot::{register_slash_commands, run_discord_gateway};
 use academic_core::extract::extract_from_text;
 use academic_core::notify::{build_task_embed, send_discord_embed, send_via_hermes};
 use academic_core::store::{ExportFormat, TaskStatus, TaskStore};
-use academic_core::{create_ics_event, AcademicPipeline, CalendarEventSpec};
+use academic_core::{
+    create_ics_event, filter_tasks_for_feed, generate_ics_feed, AcademicPipeline, CalendarEventSpec,
+};
 use academic_mcp::McpServer;
 use chrono::{Duration, Utc};
 use clap::{Parser, Subcommand};
@@ -133,6 +135,15 @@ enum Commands {
         http: Option<String>,
         #[arg(long)]
         token: Option<String>,
+    },
+    /// Export an RFC 5545 iCalendar (.ics) subscription feed for tracked tasks
+    CalendarFeed {
+        #[arg(long)]
+        include_completed: bool,
+        #[arg(long)]
+        course: Option<String>,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
 }
 
@@ -545,6 +556,49 @@ async fn run(cli: Cli) -> academic_core::Result<()> {
                 let srv = McpServer::open(&cli.config, cfg)?;
                 srv.run_stdio().await
             }
+        }
+        Commands::CalendarFeed {
+            include_completed,
+            course,
+            output,
+        } => {
+            let cfg = load_config(&cli.config, cli.db.as_deref())?;
+            let store = TaskStore::open(&cfg.general.db_path)?;
+            let tasks = store.list_tasks(None)?;
+            let filtered = filter_tasks_for_feed(&tasks, include_completed, course.as_deref());
+            let tz = cfg.timezone_tz()?;
+            let feed = generate_ics_feed(
+                &filtered,
+                tz,
+                cfg.general.default_duration_hours,
+                "academic-agent Deadlines",
+            );
+            if let Some(out_path) = output {
+                if let Some(parent) = out_path.parent() {
+                    if !parent.as_os_str().is_empty() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                }
+                std::fs::write(&out_path, &feed)?;
+                if cli.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&json!({
+                            "written": out_path.display().to_string(),
+                            "events": feed.matches("BEGIN:VEVENT").count(),
+                        }))?
+                    );
+                } else {
+                    println!(
+                        "Wrote iCalendar feed ({} event(s)) to {}",
+                        feed.matches("BEGIN:VEVENT").count(),
+                        out_path.display()
+                    );
+                }
+            } else {
+                print!("{feed}");
+            }
+            Ok(())
         }
     }
 }

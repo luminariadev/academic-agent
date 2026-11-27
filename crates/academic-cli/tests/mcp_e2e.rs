@@ -100,6 +100,16 @@ fn test_mcp_stdio_end_to_end() {
         .unwrap()
         .contains("BEGIN:VCALENDAR"));
 
+    let feed_read = send_recv(
+        &mut stdin,
+        &mut reader,
+        r#"{"jsonrpc":"2.0","id":7,"method":"resources/read","params":{"uri":"academic://calendar/feed"}}"#,
+    );
+    let feed_txt = feed_read["result"]["contents"][0]["text"].as_str().unwrap();
+    assert!(feed_txt.contains("BEGIN:VCALENDAR"));
+    assert!(feed_txt.contains("X-WR-CALNAME:academic-agent Deadlines"));
+    assert!(feed_txt.contains("OS Kernel Lab"));
+
     drop(stdin);
     let status = child.wait().unwrap();
     assert!(status.success());
