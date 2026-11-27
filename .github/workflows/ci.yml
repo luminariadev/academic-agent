@@ -38,11 +38,14 @@ jobs:
       - name: Run workspace test suite
         run: cargo test --workspace
 
-      - name: Validate example configuration and n8n workflow
+      - name: Validate example configuration, workflow, and packaging manifests
         shell: bash
         run: |
           cargo run --locked --bin academic-agent -- --config examples/academic-agent.toml validate
           python3 -c "import json; d = json.load(open('workflows/academic-agent.n8n.json', encoding='utf-8')); assert len(d['nodes']) >= 5"
+          python3 -c "import json; m = json.load(open('packaging/scoop/academic-agent.json', encoding='utf-8')); assert m['bin'] == 'academic-agent.exe' and 'hash' in m['architecture']['64bit']"
+          test -f Dockerfile
+          test -f docker-compose.yml
 
   connector:
     name: Playwright LMS connector
