@@ -1,0 +1,12 @@
+target/
+data/
+inbox/
+archive/
+*.redb
+.env
+.git/
+.github/
+connectors/
+docs/
+packaging/
+workflows/

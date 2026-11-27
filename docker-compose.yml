@@ -1,0 +1,20 @@
+services:
+  academic-agent:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - ACADEMIC_API_TOKEN=${ACADEMIC_API_TOKEN:-}
+      - ACADEMIC_LLM_API_BASE=${ACADEMIC_LLM_API_BASE:-}
+      - ACADEMIC_LLM_API_KEY=${ACADEMIC_LLM_API_KEY:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-}
+      - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID:-}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - WEBDELTA_WEBHOOK_SECRET=${WEBDELTA_WEBHOOK_SECRET:-}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-}
+      - N8N_WEBHOOK_SECRET=${N8N_WEBHOOK_SECRET:-}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
